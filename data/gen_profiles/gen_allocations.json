@@ -1,0 +1,40 @@
+{
+    "data": 
+    [
+        {
+            "bus_index": 1,
+            "profiles": 
+            {
+                "Hydropower": 2
+            }
+        },
+        {
+            "bus_index": 2,
+            "profiles": 
+            {
+                "Hydropower": 10
+            }
+        },
+        {
+            "bus_index": 3,
+            "profiles":
+            {
+                "PV": 10
+            }
+        },
+        {
+            "bus_index": 4,
+            "profiles":
+            {
+                "PV": 5
+            }
+        },
+        {
+            "bus_index": 5,
+            "profiles":
+            {
+                "Hydropower": 20
+            }
+        }
+    ]
+}

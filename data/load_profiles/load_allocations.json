@@ -1,0 +1,45 @@
+{
+    "data": 
+    [
+        {
+            "bus_index": 1,
+            "profiles": 
+            {
+                "Hospital": 2,
+                "Household": 1
+            }
+        },
+        {
+            "bus_index": 2,
+            "profiles": 
+            {
+                "Household": 100
+            }
+        },
+        {
+            "bus_index": 3,
+            "profiles":
+            {
+                "Wastewater": 1,
+                "Household": 200
+            }
+        },
+        {
+            "bus_index": 4,
+            "profiles":
+            {
+                "Spa": 1,
+                "Business": 5
+            }
+        },
+        {
+            "bus_index": 5,
+            "profiles":
+            {
+                "School": 2,
+                "Business": 2,
+                "Household": 300
+            }
+        }
+    ]
+}
