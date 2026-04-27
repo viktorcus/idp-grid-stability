@@ -19,7 +19,7 @@ def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
     """
     profile_df = pd.read_csv(f'../data/{net_element_}_profiles/csv/{net_element_}_profiles_joined.csv')
     num_profiles = len(profile_df.columns) - 1
-    num_spaces = len(net_element(net, net_element))
+    num_spaces = len(net_element(net, net_element_))
 
 
     # insufficient load profiles
@@ -60,7 +60,7 @@ def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
     ds = DFData(profile_df.iloc[:,1:])
 
     return ConstControl(net, element=net_element_, variable='p_mw', data_source=ds, 
-                              element_index=net_element(net, net_element).index, profile_name=net_element(net, net_element).index)
+                              element_index=net_element(net, net_element_).index, profile_name=net_element(net, net_element_).index)
 
 def json_to_net(net, net_element_: _NET_ELEMENT = "load"):
     '''
@@ -73,7 +73,7 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load"):
     with open(f'../data/{net_element_}_profiles/{net_element_}_allocations.json') as f:
         data = json.load(f)
         loading_df = pd.DataFrame(0, index=np.arange(35401), 
-                                  columns=np.arange(len(net_element(net, net_element))))
+                                  columns=np.arange(len(net_element(net, net_element_))))
             
         for idx in range(len(data["data"])):
             d = data["data"][idx]
@@ -84,6 +84,6 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load"):
     ds = DFData(loading_df)
     
     return ConstControl(net, element=net_element_, variable='p_mw', data_source=ds, 
-                              element_index=net_element(net, net_element).index, profile_name=net_element(net, net_element).index)
+                              element_index=net_element(net, net_element_).index, profile_name=net_element(net, net_element_).index)
 
 
