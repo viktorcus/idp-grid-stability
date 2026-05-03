@@ -25,7 +25,7 @@
             }
         },
         {
-            "bus_index": 4,
+            "bus_index": 6,
             "profiles":
             {
                 "Spa": 1,
@@ -33,7 +33,124 @@
             }
         },
         {
-            "bus_index": 5,
+            "bus_index": 7,
+            "profiles":
+            {
+                "School": 2,
+                "Business": 2,
+                "Household": 300
+            }
+        },
+        {
+            "bus_index": 9,
+            "profiles": 
+            {
+                "Business": 4
+            }
+        },
+        {
+            "bus_index": 11,
+            "profiles": 
+            {
+                "Household": 100
+            }
+        },
+        {
+            "bus_index": 13,
+            "profiles":
+            {
+                "Wastewater": 1,
+                "Household": 200
+            }
+        },
+        {
+            "bus_index": 14,
+            "profiles":
+            {
+                "Spa": 1,
+                "Business": 5
+            }
+        },
+        {
+            "bus_index": 15,
+            "profiles":
+            {
+                "School": 2,
+                "Business": 2,
+                "Household": 300
+            }
+        },
+        {
+            "bus_index": 16,
+            "profiles": 
+            {
+                "Spa": 1
+            }
+        },
+        {
+            "bus_index": 17,
+            "profiles": 
+            {
+                "Household": 100
+            }
+        },
+        {
+            "bus_index": 18,
+            "profiles":
+            {
+                "Wastewater": 1,
+                "Household": 200
+            }
+        },
+        {
+            "bus_index": 19,
+            "profiles":
+            {
+                "Spa": 1,
+                "Business": 5
+            }
+        },
+        {
+            "bus_index": 20,
+            "profiles":
+            {
+                "School": 2,
+                "Business": 2,
+                "Household": 300
+            }
+        },
+        {
+            "bus_index": 22,
+            "profiles": 
+            {
+                "Hospital": 1
+            }
+        },
+        {
+            "bus_index": 23,
+            "profiles": 
+            {
+                "Household": 100
+            }
+        },
+        {
+            "bus_index": 25,
+            "profiles":
+            {
+                "Wastewater": 1,
+                "Household": 200
+            }
+        },
+        {
+            "bus_index": 28,
+            "profiles":
+            {
+                "Spa": 1,
+                "Business": 5
+            }
+        },
+        {
+            "bus_index": 29,
             "profiles":
             {
                 "School": 2,
