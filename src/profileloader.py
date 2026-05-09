@@ -4,8 +4,9 @@ from pandapower.timeseries.data_sources.frame_data import DFData
 from typing import Literal
 import json
 import numpy as np
+import datetime as dt
 
-_NET_ELEMENT = Literal["load", "gen"]
+_NET_ELEMENT = Literal["load", "gen", "price"]
 
 def net_element(net, net_element_: _NET_ELEMENT):
     return net.load if net_element_ == "load" else net.gen
@@ -62,7 +63,7 @@ def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
     return ConstControl(net, element=net_element_, variable='p_mw', data_source=ds, 
                               element_index=net_element(net, net_element_).index, profile_name=net_element(net, net_element_).index)
 
-def json_to_net(net, net_element_: _NET_ELEMENT = "load"):
+def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, date = None):
     '''
         Reads a JSON file that describes assignments of a set of load/gen profiles to a set of loads/gens in a net. 
         Each element may be a collection of one or more of these profiles, which each may be counted multiple 
@@ -72,7 +73,7 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load"):
 
     with open(f'../data/{net_element_}_profiles/{net_element_}_allocations.json') as f:
         data = json.load(f)
-        loading_df = pd.DataFrame(0, index=np.arange(35401), 
+        loading_df = pd.DataFrame(0, index=np.arange(len(profile_df)), 
                                   columns=np.arange(len(net_element(net, net_element_))))
             
         for idx in range(len(data["data"])):
@@ -81,7 +82,17 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load"):
             for profile_name, profile_count in d["profiles"].items():
                 loading_df[idx] += profile_df[profile_name] * profile_count
 
-    ds = DFData(loading_df)
+    if limit is not None:
+        ds = DFData(loading_df[0:limit])
+    elif date is not None:
+        datenum = dt.datetime.strptime(date,"%d/%m/%Y").timetuple().tm_yday     # row position in df corresponding to date
+        startidx = (datenum-1) * 24 * 4
+        loading_df = loading_df[startidx:startidx + 24 * 4]
+        loading_df = loading_df.reset_index(drop=True)
+        ds = DFData(loading_df)
+    else:
+        ds = DFData(loading_df)
+
     
     return ConstControl(net, element=net_element_, variable='p_mw', data_source=ds, 
                               element_index=net_element(net, net_element_).index, profile_name=net_element(net, net_element_).index)
