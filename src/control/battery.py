@@ -1,15 +1,17 @@
 from pandapower import control
+from pandapower.run import runopp
+from pandapower.diagnostic import Diagnostic
+import math
 
 class Battery(control.basic_controller.Controller):
     """
     Baseline battery class, created from the tutorial in
     https://github.com/e2nIEE/pandapower/blob/develop/tutorials/building_a_controller.ipynb
     """
-
-    MIN_SOC = 20        # min percent to prevent deep discharge
     
     def __init__(self, net, element_index, data_source=None, p_profile=None, in_service=True,
-                 recycle=False, order=0, level=0, **kwargs):
+                 recycle=False, order=0, level=0, min_soc_percent=20, charge_efficiency=0.95, 
+                 discharge_efficiency=0.95, **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
                          initial_run=True)
         
@@ -20,13 +22,13 @@ class Battery(control.basic_controller.Controller):
         self.q_mvar = net.storage.at[element_index, "q_mvar"]
         self.sn_mva = net.storage.at[element_index, "sn_mva"]
         self.name = net.storage.at[element_index, "name"]
-        self.gen_type = net.storage.at[element_index, "gen_type"]
+        self.gen_type = net.storage.at[element_index, "type"]
         self.in_service = net.storage.at[element_index, "in_service"]
         self.applied = False
 
         # specific attributes
         self.max_e_mwh = net.storage.at[element_index, "max_e_mwh"]
-        self.soc_percent = net.storage.at[element_index, "soc_percent"] = 0
+        self.soc_percent = net.storage.at[element_index, "soc_percent"] 
         self.max_poss_p_mw = net.storage.at[element_index, "max_p_mw"]
         self.max_poss_q_mvar = net.storage.at[element_index, "max_q_mvar"]
         self.min_poss_p_mw = net.storage.at[element_index, "min_p_mw"]
@@ -42,9 +44,13 @@ class Battery(control.basic_controller.Controller):
         self.discharging = False
 
         # profile attributes
-        self.data_source = self.data_source
+        self.data_source = data_source
         self.p_profile = p_profile
         self.last_time_step = None
+        self.min_soc_percent = min_soc_percent
+        self.charge_efficiency = charge_efficiency
+        self.discharge_efficiency = discharge_efficiency
+
 
     def get_stored_energy(self):
         return self.max_e_mwh * self.soc_percent / 100
@@ -67,33 +73,62 @@ class Battery(control.basic_controller.Controller):
     
     def time_step(self, net, time):
         if self.last_time_step is not None:
-            self.soc_percent += (self.p_mw * (time-self.last_time_step) * 15 / 60) / self.max_e_mwh * 100
+            # adjust state of charge from the last time step to the current
+            rate_of_change = (self.p_mw * (time-self.last_time_step) * 15 / 60) / self.max_e_mwh * 100
+            if self.p_mw >= 0:
+                self.soc_percent += rate_of_change * self.charge_efficiency 
+            else:
+                self.soc_percent += rate_of_change / self.discharge_efficiency
+
+            # determine the grid's current power requirement to/from the battery
+            net_dupl = net
+            net_dupl.gen['controllable'] = False
+            try: 
+                runopp(net_dupl)
+            except: 
+                diag = Diagnostic()
+                print(diag.diagnose_network(net, report_style="detailed"))
+
+            p_mw_pred = net_dupl.res_storage["p_mw"][0].item()
+            q_mvar_pred = net_dupl.res_storage["q_mvar"][0].item()
+
+            if p_mw_pred is None or math.isnan(p_mw_pred): 
+                p_mw_pred = self.p_mw
+                q_mvar_pred = self.q_mvar
+
+            print("timestep p_mw=" + str(self.p_mw) + " soc=" + str(self.soc_percent) + " pred=" + str(p_mw_pred))
 
             # upper charging limit reached
-            if self.soc_percent >= 100:
+            if self.soc_percent >= 100 and p_mw_pred > 0:
                 self.soc_percent = 100
                 self.max_p_mw = 0       # prevent controllable battery from continuing to charge
                 self.max_q_mvar = 0
                 self.p_mw = 0
+                self.q_mvar = 0
                 
             # lower charging limit reached
-            elif self.soc_percent <= self.MIN_SOC:
-                self.soc_perc = self.MIN_SOC
+            elif self.soc_percent <= self.min_soc_percent and p_mw_pred < 0:
+                self.soc_percent = self.min_soc_percent
                 self.min_p_mw = 0       # prevent controllable battery from continuing to discharge
                 self.min_q_mvar = 0
                 self.p_mw = 0
+                self.q_mvar = 0
+
+            else:
+                self.p_mw = p_mw_pred
+                self.q_mvar = q_mvar_pred
 
             # reset charging limits if no longer required 
             if self.max_p_mw == 0 and self.soc_percent < 100:
                 self.max_p_mw = self.max_poss_p_mw
                 self.max_q_mvar = self.max_poss_q_mvar
-            elif self.min_p_mw == 0 and self.min_q_mvar > self.MIN_SOC:
+            elif self.min_p_mw == 0 and self.min_q_mvar > self.min_soc_percent:
                 self.min_p_mw = self.min_poss_p_mw
                 self.min_q_mvar = self.min_poss_q_mvar
 
         self.last_time_step = time
 
-        # read new values from a profile
+        # read new values from a profile, if provided
         if self.data_source:
             if self.p_profile is not None:
                 self.p_mw = self.data_source.get_time_step_value(time_step=time, profile_name=self.p_profile)
