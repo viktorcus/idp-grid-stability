@@ -6,10 +6,17 @@ import json
 import numpy as np
 import datetime as dt
 
-_NET_ELEMENT = Literal["load", "gen", "price"]
+_NET_ELEMENT = Literal["load", "gen", "poly_cost"]
 
 def net_element(net, net_element_: _NET_ELEMENT):
-    return net.load if net_element_ == "load" else net.gen
+    match net_element_:
+        case "load": 
+            return net.load
+        case "gen":
+            return net.gen
+        case "poly_cost":
+            return net.poly_cost
+
 
 def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
     """
@@ -59,9 +66,9 @@ def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
                 profile_df[f'{profile_df.columns.values[i]} {p+2}'] = profile_df.iloc[:,i]
 
     ds = DFData(profile_df.iloc[:,1:])
-
-    return ConstControl(net, element=net_element_, variable='p_mw', data_source=ds, 
-                              element_index=net_element(net, net_element_).index, profile_name=net_element(net, net_element_).index)
+    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ is not 'poly_cost' else 'cp1_eur_per_mw', 
+                        data_source=ds, element_index=net_element(net, net_element_).index, 
+                        profile_name=net_element(net, net_element_).index)
 
 def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, date = None):
     '''
@@ -79,12 +86,20 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
         for idx in range(len(data["data"])):
             d = data["data"][idx]
 
+            # add each profile for that node with scaling
             for profile_name, profile_count in d["profiles"].items():
                 loading_df[idx] += profile_df[profile_name] * profile_count
 
-    if limit is not None:
+            # once all profiles are added to a node, convert from kw to mw 
+            loading_df[idx] *= 0.001
+
+    # because tariff data is provided in hourly intervals, pad out rows to create 15-minute intervals like other data 
+    if net_element_ == "poly_cost":
+        loading_df = pd.DataFrame(np.repeat(loading_df.values, repeats=4, axis=0), columns=loading_df.columns)
+
+    if limit is not None:       # restrict output to a specific number of time intervals
         ds = DFData(loading_df[0:limit])
-    elif date is not None:
+    elif date is not None:      # restrict output to values from a specific date
         datenum = dt.datetime.strptime(date,"%d/%m/%Y").timetuple().tm_yday     # row position in df corresponding to date
         startidx = (datenum-1) * 24 * 4
         loading_df = loading_df[startidx:startidx + 24 * 4]
@@ -93,8 +108,8 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
     else:
         ds = DFData(loading_df)
 
-    
-    return ConstControl(net, element=net_element_, variable='p_mw', data_source=ds, 
-                              element_index=net_element(net, net_element_).index, profile_name=net_element(net, net_element_).index)
+    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ is not 'poly_cost' else 'cp1_eur_per_mw', 
+                        data_source=ds, element_index=net_element(net, net_element_).index, 
+                        profile_name=net_element(net, net_element_).index)
 
 
