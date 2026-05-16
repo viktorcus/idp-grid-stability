@@ -1,73 +1,100 @@
 {
+    "units": "kw",
     "data": 
     [
-        {
-            "bus_index": 1,
-            "profiles": 
-            {
-                "Hospital": 2,
-                "Household": 1
-            }
-        },
         {
             "bus_index": 2,
             "profiles": 
             {
-                "Household": 100
+                "Hospital": 3,
+                "School": 5,
+                "Wastewater": 2,
+                "Composting": 2,
+                "Recycling": 2,
+                "Household": 220,
+                "Business": 25,
+                "Spa": 2
             }
         },
         {
             "bus_index": 3,
-            "profiles":
+            "profiles": 
             {
-                "Wastewater": 1,
-                "Household": 200
+                "School": 1,
+                "Household": 80,
+                "Business": 1
             }
         },
         {
-            "bus_index": 6,
+            "bus_index": 4,
             "profiles":
             {
-                "Spa": 1,
-                "Business": 5
+                "Hospital": 2,
+                "School": 4,
+                "Wastewater": 1,
+                "Household": 160,
+                "Business": 4
+            }
+        },
+        {
+            "bus_index": 5,
+            "profiles":
+            {
+                "Hospital": 10,
+                "School": 12,
+                "Wastewater": 3,
+                "Composting": 3,
+                "Recycling": 3,
+                "Household": 500,
+                "Business": 40,
+                "Spa": 5
             }
         },
         {
             "bus_index": 7,
             "profiles":
             {
-                "School": 2,
-                "Business": 2,
-                "Household": 300
+                "Hospital": 2,
+                "School": 4,
+                "Wastewater": 2,
+                "Composting": 2,
+                "Recycling": 2,
+                "Household": 180,
+                "Business": 30,
+                "Spa": 1
             }
         },
         {
-            "bus_index": 9,
+            "bus_index": 8,
             "profiles": 
             {
-                "Business": 4
+                "Hospital": 3,
+                "School": 6,
+                "Wastewater": 2,
+                "Composting": 2,
+                "Recycling": 2,
+                "Household": 350,
+                "Business": 40,
+                "Spa": 1
             }
         },
         {
-            "bus_index": 11,
+            "bus_index": 10,
             "profiles": 
             {
-                "Household": 100
+                "Hospital": 1,
+                "School": 3,
+                "Household": 180,
+                "Business": 2
             }
         },
         {
-            "bus_index": 13,
+            "bus_index": 12,
             "profiles":
             {
-                "Wastewater": 1,
-                "Household": 200
-            }
-        },
-        {
-            "bus_index": 14,
-            "profiles":
-            {
-                "Spa": 1,
+                "Hospital": 1,
+                "School": 3,
+                "Household": 200,
                 "Business": 5
             }
         },
@@ -75,87 +102,102 @@
             "bus_index": 15,
             "profiles":
             {
-                "School": 2,
-                "Business": 2,
-                "Household": 300
+                "Hospital": 1,
+                "School": 3,
+                "Household": 200,
+                "Business": 4
             }
         },
         {
             "bus_index": 16,
-            "profiles": 
+            "profiles":
             {
-                "Spa": 1
+                "School": 1,
+                "Household": 120,
+                "Business": 2
             }
         },
         {
             "bus_index": 17,
             "profiles": 
             {
-                "Household": 100
+                "Hospital": 1,
+                "School": 4,
+                "Household": 230,
+                "Business": 6
             }
         },
         {
             "bus_index": 18,
-            "profiles":
+            "profiles": 
             {
-                "Wastewater": 1,
-                "Household": 200
-            }
-        },
-        {
-            "bus_index": 19,
-            "profiles":
-            {
-                "Spa": 1,
-                "Business": 5
+                "School": 1,
+                "Household": 140,
+                "Business": 2
             }
         },
         {
             "bus_index": 20,
             "profiles":
             {
-                "School": 2,
-                "Business": 2,
-                "Household": 300
-            }
-        },
-        {
-            "bus_index": 22,
-            "profiles": 
-            {
-                "Hospital": 1
+                "School": 1,
+                "Household": 60,
+                "Business": 1
             }
         },
         {
             "bus_index": 23,
+            "profiles":
+            {
+                "School": 1,
+                "Household": 60,
+                "Business": 1
+            }
+        },
+        {
+            "bus_index": 24,
+            "profiles":
+            {
+                "Hospital": 1,
+                "School": 3,
+                "Wastewater": 1,
+                "Composting": 1,
+                "Recycling": 1,
+                "Household": 190,
+                "Business": 8,
+                "Spa": 1
+            }
+        },
+        {
+            "bus_index": 26,
             "profiles": 
             {
-                "Household": 100
-            }
-        },
-        {
-            "bus_index": 25,
-            "profiles":
-            {
-                "Wastewater": 1,
-                "Household": 200
-            }
-        },
-        {
-            "bus_index": 28,
-            "profiles":
-            {
-                "Spa": 1,
-                "Business": 5
+                "School": 1,
+                "Household": 130,
+                "Business": 2
             }
         },
         {
             "bus_index": 29,
+            "profiles": 
+            {
+                "School": 1,
+                "Household": 110,
+                "Business": 1
+            }
+        },
+        {
+            "bus_index": 30,
             "profiles":
             {
-                "School": 2,
-                "Business": 2,
-                "Household": 300
+                "Hospital": 1,
+                "School": 3,
+                "Wastewater": 1,
+                "Composting": 1,
+                "Recycling": 1,
+                "Household": 210,
+                "Business": 12,
+                "Spa": 1
             }
         }
     ]

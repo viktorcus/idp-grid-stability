@@ -90,8 +90,9 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
             for profile_name, profile_count in d["profiles"].items():
                 loading_df[idx] += profile_df[profile_name] * profile_count
 
-            # once all profiles are added to a node, convert from kw to mw 
-            loading_df[idx] *= 0.001
+            # once all profiles are added to a node, convert from kw to mw if needed
+            if "units" in data and data["units"] == "kw":
+                loading_df[idx] *= 0.001
 
         # because tariff data is provided in hourly intervals, pad out rows to create 15-minute intervals like other data 
         if net_element_ == "poly_cost":
