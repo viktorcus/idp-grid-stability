@@ -93,9 +93,14 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
             # once all profiles are added to a node, convert from kw to mw 
             loading_df[idx] *= 0.001
 
-    # because tariff data is provided in hourly intervals, pad out rows to create 15-minute intervals like other data 
-    if net_element_ == "poly_cost":
-        loading_df = pd.DataFrame(np.repeat(loading_df.values, repeats=4, axis=0), columns=loading_df.columns)
+        # because tariff data is provided in hourly intervals, pad out rows to create 15-minute intervals like other data 
+        if net_element_ == "poly_cost":
+            loading_df = pd.DataFrame(np.repeat(loading_df.values, repeats=4, axis=0), columns=loading_df.columns)
+
+        # non-tariff types may need service switched on or off depending on data provided
+        elif len(data["data"]) < len(net_element(net, net_element_)) and net_element_ != "poly_cost":
+            for i in range(len(net_element(net, net_element_)), len(data["data"]), -1):
+                net_element(net, net_element_).loc[i-1, "in_service"] = False
 
     if limit is not None:       # restrict output to a specific number of time intervals
         ds = DFData(loading_df[0:limit])
@@ -108,7 +113,7 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
     else:
         ds = DFData(loading_df)
 
-    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ is not 'poly_cost' else 'cp1_eur_per_mw', 
+    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ != 'poly_cost' else 'cp1_eur_per_mw', 
                         data_source=ds, element_index=net_element(net, net_element_).index, 
                         profile_name=net_element(net, net_element_).index)
 
