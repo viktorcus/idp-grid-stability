@@ -52,6 +52,8 @@ if __name__ == '__main__':
     gen_control = pl.json_to_net(net, "gen", date=test_date)
     tariff_control = pl.json_to_net(net, "poly_cost", date=test_date)
 
+    #net.ext_grid["in_service"] = False
+
 
     ow = OutputWriter(net, 
                     output_path=results_dir, 
@@ -62,6 +64,7 @@ if __name__ == '__main__':
     ow.log_variable("res_bus", "p_mw")
     ow.log_variable("res_bus", "q_mvar")
     ow.log_variable("res_line", "loading_percent")
+    ow.log_variable("res_ext_grid", "p_mw")
     
     run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_test)
 
@@ -72,4 +75,7 @@ if __name__ == '__main__':
 
     graph.line_loading(line_failures, test_date)
     graph.bus_vpu(bus_failures, test_date)
+    graph.graph_p_mw(test_date, "gen")
+    graph.graph_p_mw(test_date, "bus")
+    graph.graph_p_mw(test_date, "ext_grid")
     

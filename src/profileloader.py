@@ -66,7 +66,7 @@ def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
                 profile_df[f'{profile_df.columns.values[i]} {p+2}'] = profile_df.iloc[:,i]
 
     ds = DFData(profile_df.iloc[:,1:])
-    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ is not 'poly_cost' else 'cp1_eur_per_mw', 
+    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ != 'poly_cost' else 'cp1_eur_per_mw', 
                         data_source=ds, element_index=net_element(net, net_element_).index, 
                         profile_name=net_element(net, net_element_).index)
 
@@ -90,6 +90,10 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
             for profile_name, profile_count in d["profiles"].items():
                 loading_df[idx] += profile_df[profile_name] * profile_count
 
+            # update load/gen at index with correct bus number
+            if "bus_index" in d:
+                net_element(net, net_element_).at[idx, "bus"] = d["bus_index"] - 1
+
             # once all profiles are added to a node, convert from kw to mw if needed
             if "units" in data and data["units"] == "kw":
                 loading_df[idx] *= 0.001
@@ -102,6 +106,7 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
         elif len(data["data"]) < len(net_element(net, net_element_)) and net_element_ != "poly_cost":
             for i in range(len(net_element(net, net_element_)), len(data["data"]), -1):
                 net_element(net, net_element_).loc[i-1, "in_service"] = False
+                
 
     if limit is not None:       # restrict output to a specific number of time intervals
         ds = DFData(loading_df[0:limit])

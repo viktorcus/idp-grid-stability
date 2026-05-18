@@ -9,6 +9,21 @@ Description: Contains a custom set of functions for graphing pandapower results
 import pandas as pd
 import seaborn as sb
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from pathlib import Path
+from pandapower.plotting.plotly import pf_res_plotly
+
+def parse_timestep(date_str, timestep):
+    # parse input date string
+    day, month, year = map(int, date_str.split('/'))
+    base_date = datetime(year, month, day)
+
+    # calculate time offset
+    time_offset = timedelta(minutes=timestep * 15)
+    final_datetime = base_date + time_offset
+
+    # format to yyyy-mm hh:mm
+    return final_datetime.strftime("%m-%d %H-%M")
 
 def line_loading(line_list, date):
     lines = pd.read_csv('..\\results\\collapse\\res_line\\loading_percent.csv')
@@ -27,3 +42,16 @@ def bus_vpu(bus_list, date):
         xmin=0, xmax=96, linestyles=["dashed", "dashed"], colors=["gray", "gray"])  
     plt.show()
     ax.figure.savefig('..\\results\\collapse\\res_bus\\vm_pu.png')
+
+def graph_p_mw(date, net_element):
+    results = pd.read_csv(f'..\\results\\collapse\\res_{net_element}\\p_mw.csv')
+    results.drop(results.columns[0], axis=1, inplace=True)  # discard timestep column
+    ax = sb.lineplot(data=results)
+    ax.set(xlabel=f'time step ({date})', ylabel='power [MW]')
+    plt.show()
+    ax.figure.savefig(f'..\\results\\collapse\\res_{net_element}\\p_mw.png')
+
+def plot_powerflow_result(net, date, timestep):
+    Path('..\\results\\collapse\\pf').mkdir(parents=True, exist_ok=True)
+    filename = f'..\\results\\collapse\\pf\\pf_graph_{parse_timestep(date, timestep)}.html'
+    pf_res_plotly(net, filename=filename, auto_open=False)
