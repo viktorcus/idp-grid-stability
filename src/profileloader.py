@@ -9,6 +9,10 @@ import datetime as dt
 _NET_ELEMENT = Literal["load", "gen", "poly_cost"]
 
 def net_element(net, net_element_: _NET_ELEMENT):
+    """
+        Returns relevant dataframe from net.
+        Helper to make json_to_net broadly reusable across net element types.
+    """
     match net_element_:
         case "load": 
             return net.load
@@ -70,12 +74,12 @@ def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
                         data_source=ds, element_index=net_element(net, net_element_).index, 
                         profile_name=net_element(net, net_element_).index)
 
-def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, date = None):
-    '''
+def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, date = None, interval_avg = None):
+    """
         Reads a JSON file that describes assignments of a set of load/gen profiles to a set of loads/gens in a net. 
         Each element may be a collection of one or more of these profiles, which each may be counted multiple 
         times (e.g., one load may contain one school and twenty houses). 
-    '''
+    """
     profile_df = pd.read_csv(f'../data/{net_element_}_profiles/csv/{net_element_}_profiles_joined.csv')
 
     with open(f'../data/{net_element_}_profiles/{net_element_}_allocations.json') as f:
@@ -109,7 +113,7 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
                 
 
     if limit is not None:       # restrict output to a specific number of time intervals
-        ds = DFData(loading_df[0:limit])
+        ds = DFData(loading_df[0:limit])      
     elif date is not None:      # restrict output to values from a specific date
         datenum = dt.datetime.strptime(date,"%d/%m/%Y").timetuple().tm_yday     # row position in df corresponding to date
         startidx = (datenum-1) * 24 * 4
@@ -124,3 +128,4 @@ def json_to_net(net, net_element_: _NET_ELEMENT = "load", limit: int = None, dat
                         profile_name=net_element(net, net_element_).index)
 
 
+    
