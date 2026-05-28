@@ -7,6 +7,7 @@ from tools.limits import bus_vm_pu_limits, line_loading_limits
 import tools.graphs as graph
 import profileloader as pl
 import os, shutil    
+import pandapower
 
 bus_failures = []
 line_failures = []
@@ -73,9 +74,10 @@ def init_run():
     net = case30()
 
      # import profiles for timeseries data
-    load_control = pl.json_to_net(net, "load", date=test_date)
-    gen_control = pl.json_to_net(net, "gen", date=test_date)
-    tariff_control = pl.json_to_net(net, "poly_cost", date=test_date)
+    load_control = pl.json_to_net_generic(net, "load", date=test_date)
+    gen_control = pl.json_to_net_pv(net, date=test_date)
+    tariff_control = pl.json_to_net_generic(net, "poly_cost", date=test_date)
+    hydro_control = pl.json_to_net_hydro(net, date=test_date)
 
     return net
 
