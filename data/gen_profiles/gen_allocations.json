@@ -13,14 +13,14 @@
             "bus_index": 5,
             "profiles": 
             {
-                "Hydropower": 120
+                "Hydro": 120
             }
         },
         {
             "bus_index": 8,
             "profiles":
             {
-                "Hydropower": 80
+                "Hydro": 80
             }
         }
     ]

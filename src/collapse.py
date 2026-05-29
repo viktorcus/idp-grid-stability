@@ -108,6 +108,7 @@ def init_results_dir(results_dir):
     ow.log_variable("res_bus", "q_mvar")
     ow.log_variable("res_line", "loading_percent")
     ow.log_variable("res_ext_grid", "p_mw")
+    ow.log_variable("res_storage", "p_mw")
 
     return net
 
@@ -124,6 +125,7 @@ def collect_results(results_dir):
     graph.graph_p_mw(test_date, "gen", results_dir)
     graph.graph_p_mw(test_date, "bus", results_dir)
     graph.graph_p_mw(test_date, "ext_grid", results_dir)
+    graph.graph_p_mw(test_date, "storage", results_dir)
 
 if __name__ == '__main__':
     # begin by importing the case 30 and the data controllers
@@ -140,11 +142,15 @@ if __name__ == '__main__':
     init_results_dir("extgridless")
     
     net.bus["max_vm_pu"] = 10
-    net.bus["min_vm_pu"] = 0
-    net.line["max_loading_percent"] = 500
+    net.bus["min_vm_pu"] = -10
+    net.line["max_loading_percent"] = 1000
     net.ext_grid["max_p_mw"] = 1000
+    net.ext_grid["max_q_mvar"] = 1000
     net.ext_grid["min_p_mw"] = 0
-    net.gen["controllable"] = False
+    net.ext_grid["min_q_mvar"] = 0
+    net.ext_grid["controllable"] = True
+    print(net.ext_grid)
+    #net.gen["controllable"] = False
 
     run_timeseries(net, continue_on_divergence=True, max_iteration=80, verbose=True, run=run_collapse_without_extgrid)
     collect_results("extgridless")
