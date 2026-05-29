@@ -87,7 +87,7 @@ class Battery(control.basic_controller.Controller):
                 runopp(net_dupl)
             except: 
                 diag = Diagnostic()
-                print(diag.diagnose_network(net, report_style="detailed"))
+                #diag.diagnose_network(net, report_style="None"))
 
             p_mw_pred = net_dupl.res_storage["p_mw"][0].item()
             q_mvar_pred = net_dupl.res_storage["q_mvar"][0].item()
@@ -96,7 +96,7 @@ class Battery(control.basic_controller.Controller):
                 p_mw_pred = self.p_mw
                 q_mvar_pred = self.q_mvar
 
-            print("timestep p_mw=" + str(self.p_mw) + " soc=" + str(self.soc_percent) + " pred=" + str(p_mw_pred))
+            #print("timestep p_mw=" + str(self.p_mw) + " soc=" + str(self.soc_percent) + " pred=" + str(p_mw_pred))
 
             # upper charging limit reached
             if self.soc_percent >= 100 and p_mw_pred > 0:
