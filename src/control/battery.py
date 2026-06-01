@@ -96,8 +96,9 @@ class Battery(control.basic_controller.Controller):
             try:
                 net_dupl.ext_grid['controllable'] = True
                 runpp(net_dupl, max_iteration=40)
-                p_mw_pred = -1 * net_dupl.res_ext_grid["p_mw"][0].item()
-                q_mvar_pred = -1 * net_dupl.res_ext_grid["q_mvar"][0].item()
+                batt_count = len(net_dupl[net_dupl.name == 'battery'])
+                p_mw_pred = -1 * net_dupl.res_ext_grid["p_mw"][0].item() / batt_count
+                q_mvar_pred = -1 * net_dupl.res_ext_grid["q_mvar"][0].item() / batt_count
             except:
                 p_mw_pred = self.p_mw
                 q_mvar_pred = self.q_mvar
