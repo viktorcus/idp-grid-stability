@@ -1,24 +1,22 @@
 import numpy as np
 import pandas as pd
-from pandapower.run import runpp, runopp
-from pandapower.timeseries.run_time_series import run_timeseries, OutputWriter
+from pandapower.run import runpp
+from pandapower.timeseries.run_time_series import run_timeseries
 from pandapower.networks.power_system_test_cases import case30
 from pandapower.create import create_storage
 import profileloader as pl
 import scipy.optimize as optimize
 from control.battery import Battery
-from enum import Enum
-import seaborn as sb
-from tools import jacobian
-import matplotlib.pyplot as plt
+from control.timestep import TimeStepTracker
         
 # define globals
 test_date = "4/10/2026"
 checkpoints_path = f'..\\results\\optimizer\\checkpoints.csv'
 
-bus_violation_cost = 0
-line_violation_cost = 0
-timestep = 0
+max_discrepancy = 0
+bus_violation_cost = {}
+line_violation_cost = {}
+ext_grid_penalty_cost = {}
 mse_temp = 0
 rankings = {}
 
@@ -28,10 +26,10 @@ def init_run():
         Reset net before a timeseries run, with default case 30 values and timeseries data imported from data files
     """
     # reset global variables
-    global bus_violation_cost, line_violation_cost, mse_temp
-    bus_violation_cost = 0
-    line_violation_cost = 0
-    mse_temp = 0
+    global bus_violation_cost, line_violation_cost, ext_grid_penalty_cost, mse_temp
+    bus_violation_cost = {}
+    line_violation_cost = {}
+    ext_grid_penalty_cost = {}
 
     # reset net
     net = case30()
@@ -42,6 +40,7 @@ def init_run():
     gen_control = pl.json_to_net_pv(net, date=test_date)
     tariff_control = pl.json_to_net_generic(net, "poly_cost", date=test_date)
     hydro_control = pl.json_to_net_hydro(net, date=test_date)
+    tracker_control = TimeStepTracker(net)
     net.ext_grid["controllable"] = False
     net.gen["controllable"] = False
 
@@ -49,24 +48,25 @@ def init_run():
 
 def maintain_rankings(net, buses, err):
     global rankings
-    if len(rankings) < 10:
-        rankings[buses] = err.item()
-        rankings = dict(sorted(rankings.items(), key=lambda item: item[1]))
-    elif err < list(rankings.values())[9]:
-        rankings.popitem()
-        rankings[buses] = err.item()
-        rankings = dict(sorted(rankings.items(), key=lambda item: item[1]))
+    if err >= 0:    # filter out nonconverged results (-1)
+        if len(rankings) < 10:
+            rankings[buses] = err
+            rankings = dict(sorted(rankings.items(), key=lambda item: item[1]))
+        elif err < list(rankings.values())[9]:
+            rankings.popitem()
+            rankings[buses] = err
+            rankings = dict(sorted(rankings.items(), key=lambda item: item[1]))
     print(rankings)
 
 
 def energy_analysis(net):
     totals = 0
     for i, row in net.controller.iterrows():
-        ctrl = row.object.data_source.df
-        if row.object.element in ['load', 'storage']:
-            totals -= ctrl.sum(axis=1)
-        elif row.object.element != 'poly_cost':
-            totals += ctrl.sum(axis=1)
+        ctrl = row.object
+        if ctrl.element in ['load', 'storage']:
+            totals -= ctrl.data_source.df.sum(axis=1)
+        elif ctrl.element not in ['poly_cost', 'timestep']:
+            totals += ctrl.data_source.df.sum(axis=1)
     print(totals[0])
 
     return {
@@ -77,6 +77,7 @@ def energy_analysis(net):
     }
 
 def bus_violations(net):
+
     vm = net.res_bus.vm_pu.values
     vmin = net.bus.min_vm_pu.values
     vmax = net.bus.max_vm_pu.values
@@ -94,12 +95,20 @@ def line_violations(net):
     line_violation = np.maximum(0.0, loading - max_loading) / 100
     return np.sum(line_violation ** 2)
 
+def grid_penalty(net):
+    return (net.res_ext_grid.p_mw / max_discrepancy) ** 2
+
 def timeseries_runner(net, **kwargs):
-    global bus_violation_cost, line_violation_cost 
+    global bus_violation_cost, line_violation_cost, ext_grid_penalty_cost
 
     runpp(net, max_iteration=40)
-    bus_violation_cost += bus_violations(net)
-    line_violation_cost += line_violations(net)
+
+    ts = net["_timestep"]
+
+    bus_violation_cost[ts] = bus_violations(net).item()
+    line_violation_cost[ts] = line_violations(net).item()
+    ext_grid_penalty_cost[ts] = grid_penalty(net).item()
+    #print(ext_grid_penalty_cost)
 
 
 
@@ -107,7 +116,7 @@ def optimizer_trial(optimizer_params, bus_index):
     """
         Runner function to perform optimization on a particular bus
     """
-    global mse_temp
+    global timestep
 
     net = init_run()
     if len(optimizer_params) > 0:
@@ -152,10 +161,11 @@ def optimizer_trial(optimizer_params, bus_index):
         run_timeseries(net, continue_on_divergence=False, max_iteration=40, run=timeseries_runner, verbose=True)
     except: 
         print("model not converged")
-        return 1
+        return -1
 
-    print(f'   current params: {optimizer_params}, current err: {bus_violation_cost + line_violation_cost}')
-    return bus_violation_cost + line_violation_cost
+    total_cost = sum(bus_violation_cost.values()) + sum(line_violation_cost.values()) + sum(ext_grid_penalty_cost.values())
+    print(f'   current params: {optimizer_params}, current err: {total_cost}')
+    return total_cost
 
 
 def target_buses():
@@ -165,13 +175,12 @@ def target_buses():
         the bus that had the best results after optimziation
     """
 
-    global mse_temp
+    global mse_temp, max_discrepancy
 
     net = init_run()
-    num_buses = len(net.bus)
-
     net_stats = energy_analysis(net)
     max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
+    num_buses = len(net.bus)
 
     optimizer_params = [max_discrepancy / 100]      # params representing mwh of 1+ batteries, divided by 100 for optimization 
     optimized_solution = -1
@@ -235,14 +244,8 @@ def target_buses():
 def optimize_targets():
     global rankings
 
-    net = init_run()
-    net_stats = energy_analysis(net)
-    max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
-
     for bus_list, err in rankings:
         net = init_run()
-        net_stats = energy_analysis(net)
-        max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
 
         optimizer_params = [bus_list[0]]
         if len(bus_list) > 1: 
@@ -261,6 +264,6 @@ def optimize_targets():
         
 
 if __name__ == '__main__':
-    # 
+
     target_buses()
     optimize_targets()
