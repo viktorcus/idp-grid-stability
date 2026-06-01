@@ -1,5 +1,5 @@
 from pandapower import control
-from pandapower.run import runopp
+from pandapower.run import runopp, runpp
 from pandapower.diagnostic import Diagnostic
 import math
 
@@ -80,51 +80,61 @@ class Battery(control.basic_controller.Controller):
             else:
                 self.soc_percent += rate_of_change / self.discharge_efficiency
 
-            # determine the grid's current power requirement to/from the battery
-            net_dupl = net
-            net_dupl.gen['controllable'] = False
-            try: 
-                runopp(net_dupl)
-            except: 
-                diag = Diagnostic()
-                #diag.diagnose_network(net, report_style="None"))
-
-            p_mw_pred = net_dupl.res_storage["p_mw"][0].item()
-            q_mvar_pred = net_dupl.res_storage["q_mvar"][0].item()
-
-            if p_mw_pred is None or math.isnan(p_mw_pred): 
+        # determine the grid's current power requirement to/from the battery
+        net_dupl = net
+        net_dupl.storage.loc[self.element_index, "p_mw"] = 0
+        net_dupl.ext_grid.loc[0, "p_mw"] = 0
+        net_dupl.gen['controllable'] = False
+        net_dupl.ext_grid['controllable'] = False
+        try: 
+            runopp(net_dupl)
+            p_mw_pred = net_dupl.res_storage["p_mw"][self.element_index].item()
+            q_mvar_pred = net_dupl.res_storage["q_mvar"][self.element_index].item()
+        except: 
+            diag = Diagnostic()
+            #print(diag.diagnose_network(net, report_style="detailed"))
+            try:
+                net_dupl.ext_grid['controllable'] = True
+                runpp(net_dupl, max_iteration=40)
+                p_mw_pred = -1 * net_dupl.res_ext_grid["p_mw"][0].item()
+                q_mvar_pred = -1 * net_dupl.res_ext_grid["q_mvar"][0].item()
+            except:
                 p_mw_pred = self.p_mw
                 q_mvar_pred = self.q_mvar
 
-            #print("timestep p_mw=" + str(self.p_mw) + " soc=" + str(self.soc_percent) + " pred=" + str(p_mw_pred))
+        if p_mw_pred is None or math.isnan(p_mw_pred): 
+            p_mw_pred = self.p_mw
+            q_mvar_pred = self.q_mvar
 
-            # upper charging limit reached
-            if self.soc_percent >= 100 and p_mw_pred > 0:
-                self.soc_percent = 100
-                self.max_p_mw = 0       # prevent controllable battery from continuing to charge
-                self.max_q_mvar = 0
-                self.p_mw = 0
-                self.q_mvar = 0
+        #print("timestep p_mw=" + str(self.p_mw) + " soc=" + str(self.soc_percent) + " pred=" + str(p_mw_pred))
+
+        # upper charging limit reached
+        if self.soc_percent >= 100 and p_mw_pred > 0:
+            self.soc_percent = 100
+            self.max_p_mw = 0       # prevent controllable battery from continuing to charge
+            self.max_q_mvar = 0
+            self.p_mw = 0
+            self.q_mvar = 0
                 
-            # lower charging limit reached
-            elif self.soc_percent <= self.min_soc_percent and p_mw_pred < 0:
-                self.soc_percent = self.min_soc_percent
-                self.min_p_mw = 0       # prevent controllable battery from continuing to discharge
-                self.min_q_mvar = 0
-                self.p_mw = 0
-                self.q_mvar = 0
+        # lower charging limit reached
+        elif self.soc_percent <= self.min_soc_percent and p_mw_pred < 0:
+            self.soc_percent = self.min_soc_percent
+            self.min_p_mw = 0       # prevent controllable battery from continuing to discharge
+            self.min_q_mvar = 0
+            self.p_mw = 0
+            self.q_mvar = 0
 
-            else:
-                self.p_mw = p_mw_pred
-                self.q_mvar = q_mvar_pred
+        else:
+            self.p_mw = p_mw_pred
+            self.q_mvar = q_mvar_pred
 
-            # reset charging limits if no longer required 
-            if self.max_p_mw == 0 and self.soc_percent < 100:
-                self.max_p_mw = self.max_poss_p_mw
-                self.max_q_mvar = self.max_poss_q_mvar
-            elif self.min_p_mw == 0 and self.min_q_mvar > self.min_soc_percent:
-                self.min_p_mw = self.min_poss_p_mw
-                self.min_q_mvar = self.min_poss_q_mvar
+        # reset charging limits if no longer required 
+        if self.max_p_mw == 0 and self.soc_percent < 100:
+            self.max_p_mw = self.max_poss_p_mw
+            self.max_q_mvar = self.max_poss_q_mvar
+        elif self.min_p_mw == 0 and self.min_q_mvar > self.min_soc_percent:
+            self.min_p_mw = self.min_poss_p_mw
+            self.min_q_mvar = self.min_poss_q_mvar
 
         self.last_time_step = time
 

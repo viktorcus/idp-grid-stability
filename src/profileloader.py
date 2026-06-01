@@ -172,9 +172,9 @@ def json_to_net_hydro(net, limit: int = None, date = None):
                             max_e_mwh=profile_count, sn_mva=0, soc_percent=50,
                             bus=d["bus_index"] - 1)
                     if len(loading_df.columns) > idx:
-                        loading_df[idx] += profile_df[profile_name] * profile_count
+                        loading_df[idx] += profile_df[profile_name] * profile_count * -1
                     else:
-                        loading_df[len(loading_df.columns)] = profile_df[profile_name] * profile_count
+                        loading_df[len(loading_df.columns)] = profile_df[profile_name] * profile_count * -1
 
             # once all profiles are added to a node, convert from kw to mw if needed
             if "units" in data and data["units"] == "kw":

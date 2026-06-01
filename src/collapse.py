@@ -7,7 +7,9 @@ from tools.limits import bus_vm_pu_limits, line_loading_limits
 import tools.graphs as graph
 import profileloader as pl
 import os, shutil    
+from pandapower.create import create_storage
 import pandapower
+from control.battery import Battery
 
 bus_failures = []
 line_failures = []
@@ -126,21 +128,54 @@ def collect_results(results_dir):
     graph.graph_p_mw(test_date, "bus", results_dir)
     graph.graph_p_mw(test_date, "ext_grid", results_dir)
     graph.graph_p_mw(test_date, "storage", results_dir)
+    
+
+def energy_analysis(net):
+
+    totals = 0
+    for i, row in net.controller.iterrows():
+        ctrl = row.object.data_source.df
+        if row.object.element in ['load', 'storage']:
+            totals -= ctrl.sum(axis=1)
+        elif row.object.element != 'poly_cost':
+            totals += ctrl.sum(axis=1)
+    print(totals[0])
+
+    return {
+        "Peak Surplus": max(totals), 
+        "Peak Deficit": min(totals),
+        "Total Surplus": (totals.loc[lambda x : x > 0].sum() * .25).item(),
+        "Total Deficit": (totals.loc[lambda x : x < 0].sum() * .25).item()
+    }
 
 if __name__ == '__main__':
-    # begin by importing the case 30 and the data controllers
+    # begin by importing the case 30 and the data controllers   
     net = init_run()
-    init_results_dir("extgrid")
-
-    
+    init_results_dir("extgrid") 
     run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
     collect_results("extgrid")
+
+    net = init_run()
+    net_stats = energy_analysis(net)
+    max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
+    battery1 = create_storage(net, 6, 
+                             p_mw=0, 
+                             max_p_mw=max_discrepancy,
+                             max_q_mvar=max_discrepancy,
+                             min_p_mw=-max_discrepancy,
+                             min_q_mvar=-max_discrepancy,
+                             max_e_mwh=max_discrepancy * 4,
+                             soc_percent=50,
+                             controllable=True)
+    storage_control = Battery(net=net, element_index=battery1.item())
+    init_results_dir("single_storage") 
+    run_timeseries(net, continue_on_divergence=True, max_iteration=80, verbose=True, run=run_collapse_with_extgrid)
+    collect_results("single_storage")
 
 
 
     net = init_run()
     init_results_dir("extgridless")
-    
     net.bus["max_vm_pu"] = 10
     net.bus["min_vm_pu"] = -10
     net.line["max_loading_percent"] = 1000
@@ -149,7 +184,6 @@ if __name__ == '__main__':
     net.ext_grid["min_p_mw"] = 0
     net.ext_grid["min_q_mvar"] = 0
     net.ext_grid["controllable"] = True
-    print(net.ext_grid)
     #net.gen["controllable"] = False
 
     run_timeseries(net, continue_on_divergence=True, max_iteration=80, verbose=True, run=run_collapse_without_extgrid)
