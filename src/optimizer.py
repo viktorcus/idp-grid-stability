@@ -6,8 +6,10 @@ from pandapower.networks.power_system_test_cases import case30
 from pandapower.create import create_storage
 import profileloader as pl
 import scipy.optimize as optimize
+from control.hydrogen import Hydrogen
 from control.battery import Battery
 from control.timestep import TimeStepTracker
+from tools.test_runner import dispatch_storage
         
 # define globals
 test_date = "4/10/2026"
@@ -101,7 +103,9 @@ def grid_penalty(net):
 def timeseries_runner(net, **kwargs):
     global bus_violation_cost, line_violation_cost, ext_grid_penalty_cost
 
+    dispatch_storage(net, strategy='battery_first')
     runpp(net, max_iteration=40)
+    print(net.storage)
 
     ts = net["_timestep"]
 
@@ -131,6 +135,14 @@ def optimizer_trial(optimizer_params, bus_index):
                                 soc_percent=50,
                                 controllable=True)
         storage_control = Battery(net=net, element_index=battery1.item())
+
+        hydrogen1 = create_storage(net, bus_index[0] + 3,
+                                   name="hydrogen",
+                                   max_e_mwh=1000,
+                                   p_mw=0,
+                                   soc_percent=0,
+                                   controllable=True)
+        hydrogen_control = Hydrogen(net=net, element_index=hydrogen1.item())
 
     if len(optimizer_params) > 1:
         battery2 = create_storage(net, bus_index[1], 

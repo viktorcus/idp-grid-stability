@@ -11,7 +11,7 @@ class Battery(control.basic_controller.Controller):
     
     def __init__(self, net, element_index, data_source=None, p_profile=None, in_service=True,
                  recycle=False, order=0, level=0, min_soc_percent=20, charge_efficiency=0.95, 
-                 discharge_efficiency=0.95, **kwargs):
+                 discharge_efficiency=0.95, max_soc_percent=100, **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
                          initial_run=True)
         
@@ -48,8 +48,13 @@ class Battery(control.basic_controller.Controller):
         self.p_profile = p_profile
         self.last_time_step = None
         self.min_soc_percent = min_soc_percent
+        self.max_soc_percent = max_soc_percent
         self.charge_efficiency = charge_efficiency
         self.discharge_efficiency = discharge_efficiency
+
+        # add these to grid-available data        
+        net.storage.at[self.element_index, "max_soc_percent"] = self.max_soc_percent
+        net.storage.at[self.element_index, "min_soc_percent"] = self.min_soc_percent
 
 
     def get_stored_energy(self):
@@ -81,7 +86,7 @@ class Battery(control.basic_controller.Controller):
                 self.soc_percent += rate_of_change / self.discharge_efficiency
 
         # determine the grid's current power requirement to/from the battery
-        net_dupl = net
+        """net_dupl = net
         net_dupl.storage.loc[self.element_index, "p_mw"] = 0
         net_dupl.ext_grid.loc[0, "p_mw"] = 0
         net_dupl.gen['controllable'] = False
@@ -135,7 +140,7 @@ class Battery(control.basic_controller.Controller):
             self.max_q_mvar = self.max_poss_q_mvar
         elif self.min_p_mw == 0 and self.min_q_mvar > self.min_soc_percent:
             self.min_p_mw = self.min_poss_p_mw
-            self.min_q_mvar = self.min_poss_q_mvar
+            self.min_q_mvar = self.min_poss_q_mvar"""
 
         self.last_time_step = time
 
