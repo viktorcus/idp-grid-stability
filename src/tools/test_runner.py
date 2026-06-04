@@ -3,6 +3,9 @@ import os, shutil
 from pathlib import Path
 from pandapower.timeseries.run_time_series import OutputWriter
 from .graphs import *
+import math
+
+YEAR = 2021   # year doesn't actually matter, but needed to calculate space between intervals
 
 def init_results_dir(net, results_dir):
     """
@@ -34,6 +37,7 @@ def init_results_dir(net, results_dir):
     ow.log_variable("res_ext_grid", "p_mw")
     ow.log_variable("res_storage", "p_mw")
     ow.log_variable("storage", "soc_percent")
+    ow.log_variable("storage", "stored_e_mwh")
 
     return net
 
@@ -194,12 +198,20 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
 
         # allocate any power that remains to hydrogen
         if remaining > tolerance_mw:
+            total_available = sum(
+                abs(net.storage.at[idx, "max_p_mw"])
+                for idx in hydrogen_idx
+            )
+            hydrogen_dispatch = min(remaining, total_available)
+            share = hydrogen_dispatch / len(hydrogen_idx)
+
             for idx in hydrogen_idx:
 
                 limit = net.storage.at[idx, "max_p_mw"]
-                actual = min(remaining, limit)
+                actual = min(share, limit)
                 net.storage.at[idx, "p_mw"] = actual
                 remaining -= actual
+                print(f'p_mw   {net.storage.at[idx, "p_mw"]}     reminaing {remaining}')
 
                 if remaining <= tolerance_mw:
                     break
@@ -243,4 +255,99 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
                     break
 
 
+def energy_analysis(net):
+    """
+    Analyzes all points in the grid for surplus and deficit data
+    """
+    totals = 0
+    for i, row in net.controller.iterrows():
+        ctrl = row.object
+        if ctrl.element in ['load', 'storage']:
+            totals -= ctrl.data_source.df.sum(axis=1)
+        elif ctrl.element not in ['poly_cost', 'timestep']:
+            totals += ctrl.data_source.df.sum(axis=1)
 
+    peak_surplus_interval = totals.idxmax()
+    peak_deficit_interval = totals.idxmin()
+
+    start = pd.Timestamp(f"{YEAR}-01-01 00:00:00")
+
+    peak_surplus_date = start + pd.Timedelta(minutes=15 * peak_surplus_interval)
+    peak_deficit_date = start + pd.Timedelta(minutes=15 * peak_deficit_interval)
+
+    return {
+        "Peak Surplus": math.ceil(max(totals)), 
+        "Peak Surplus Date": peak_surplus_date.strftime("%d/%m/%Y"),
+        "Peak Deficit": math.ceil(min(totals)), 
+        "Peak Deficit Date": peak_deficit_date.strftime("%d/%m/%Y"),
+        "Total Surplus": math.ceil((totals.loc[lambda x : x > 0].sum() * .25).item()),
+        "Total Deficit": math.ceil((totals.loc[lambda x : x < 0].sum() * .25).item()),
+        "Full Surplus Date": peak_surplus_interval
+    }
+
+def average_day(net, span='month', split_weekends=False):
+    """
+    Get profiles of an average day in a month/quarter.
+    If split_weekends is true, then we divide up profiles also according to whether they fall on a weekday or weekend.
+    """
+    avg_profiles = {}
+    for i, row in net.controller.iterrows():
+        ctrl = row.object
+        excess_columns = ["datetime", "interval_of_day", span]     # to hold columns to be dropped again from the df after completion
+
+        df = ctrl.data_source.df
+        start = pd.Timestamp(f"{YEAR}-01-01 00:00:00")
+
+        # extract date info based on the current time interval
+        df["datetime"] = start + pd.to_timedelta(df.index * 15, unit="min")
+        df["interval_of_day"] = (df["datetime"].dt.hour * 4
+            + df["datetime"].dt.minute // 15
+        )
+
+        if split_weekends:  # determine if we also need grouping by weekday/weekend
+            df["day_type"] = df["datetime"].dt.dayofweek.map(
+                lambda x: "Weekend" if x >= 5 else "Weekday"
+            )
+            excess_columns.append("day_type")
+
+            if span == 'month':
+                df["month"] = df["datetime"].dt.month
+                montly_profile = (   # group data by month and slice of day
+                    df.groupby(["month", "interval_of_day", "day_type"])
+                    .mean(numeric_only=True)
+                    .reset_index()
+                )
+                avg_profiles[ctrl.element] = montly_profile
+                df.drop(excess_columns, axis=1, inplace=True)
+            elif span == 'quarter':
+                df["quarter"] = df["datetime"].dt.quarter
+                quarterly_profile = (   # group data by quarter and slice of day
+                    df.groupby(["quarter", "interval_of_day", "day_type"])
+                    .mean(numeric_only=True)
+                    .reset_index()
+                )
+                avg_profiles[ctrl.element] = quarterly_profile
+                df.drop(excess_columns, axis=1, inplace=True)
+
+        else:
+            if span == 'month':
+                df["month"] = df["datetime"].dt.month
+                montly_profile = (   # group data by month and slice of day
+                    df.groupby(["month", "interval_of_day"])
+                    .mean(numeric_only=True)
+                    .reset_index()
+                )
+                avg_profiles[ctrl.element] = montly_profile
+                df.drop(excess_columns, axis=1, inplace=True)
+            elif span == 'quarter':
+                df["quarter"] = df["datetime"].dt.quarter
+                quarterly_profile = (   # group data by quarter and slice of day
+                    df.groupby(["quarter", "interval_of_day"])
+                    .mean(numeric_only=True)
+                    .reset_index()
+                )
+                avg_profiles[ctrl.element] = quarterly_profile
+                df.drop(excess_columns, axis=1, inplace=True)
+
+
+    #print(avg_profiles)

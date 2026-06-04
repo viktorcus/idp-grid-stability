@@ -9,7 +9,7 @@ import scipy.optimize as optimize
 from control.hydrogen import Hydrogen
 from control.battery import Battery
 from control.timestep import TimeStepTracker
-from tools.test_runner import dispatch_storage
+from tools.test_runner import dispatch_storage, energy_analysis
         
 # define globals
 test_date = "4/10/2026"
@@ -59,24 +59,6 @@ def maintain_rankings(net, buses, err):
             rankings[buses] = err
             rankings = dict(sorted(rankings.items(), key=lambda item: item[1]))
     print(rankings)
-
-
-def energy_analysis(net):
-    totals = 0
-    for i, row in net.controller.iterrows():
-        ctrl = row.object
-        if ctrl.element in ['load', 'storage']:
-            totals -= ctrl.data_source.df.sum(axis=1)
-        elif ctrl.element not in ['poly_cost', 'timestep']:
-            totals += ctrl.data_source.df.sum(axis=1)
-    print(totals[0])
-
-    return {
-        "Peak Surplus": max(totals), 
-        "Peak Deficit": min(totals),
-        "Total Surplus": (totals.loc[lambda x : x > 0].sum() * .25).item(),
-        "Total Deficit": (totals.loc[lambda x : x < 0].sum() * .25).item()
-    }
 
 def bus_violations(net):
 

@@ -55,14 +55,23 @@ def graph_battery_soc(net, date, results_dir):
     results = pd.read_csv(f'..\\results\\{results_dir}\\storage\\soc_percent.csv')
     battery_idx = net.storage[net.storage["name"] == "battery"].index.values
     results.drop(results.columns[0], axis=1, inplace=True)  # discard timestep column
-    print(results.columns)
     for col in reversed(results.columns):
-        print(int(col))
         if int(col) not in battery_idx: results.drop(results.columns[int(col)], axis=1, inplace=True)
     ax = sb.lineplot(data=results)
     ax.set(xlabel=f'time step ({date})', ylabel='SOC', title='Battery SOC Percent')
     plt.show()
     ax.figure.savefig(f'..\\results\\{results_dir}\\storage\\soc_percent.png')
+
+def graph_hydrogen_storage(net, date, results_dir):
+    results = pd.read_csv(f'..\\results\\{results_dir}\\storage\\stored_e_mwh.csv')
+    battery_idx = net.storage[net.storage["name"] == "hydrogen"].index.values
+    results.drop(results.columns[0], axis=1, inplace=True)  # discard timestep column
+    for col in reversed(results.columns):
+        if int(col) not in battery_idx: results.drop(results.columns[int(col)], axis=1, inplace=True)
+    ax = sb.lineplot(data=results)
+    ax.set(xlabel=f'time step ({date})', ylabel='Energy (MWh)', title='Hydrogen Stored')
+    plt.show()
+    ax.figure.savefig(f'..\\results\\{results_dir}\\storage\\stored_e_mwh.png')
 
 def plot_powerflow_result(net, date, timestep, results_dir):
     Path(f'..\\results\\{results_dir}\\pf').mkdir(parents=True, exist_ok=True)
