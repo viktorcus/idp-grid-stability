@@ -13,7 +13,7 @@ from tools.test_runner import dispatch_storage
         
 # define globals
 test_date = "4/10/2026"
-checkpoints_path = f'..\\results\\optimizer\\checkpoints.csv'
+checkpoints_path = f'..\\results\\optimizer\\rankings.csv'
 
 max_discrepancy = 0
 bus_violation_cost = {}
@@ -105,7 +105,6 @@ def timeseries_runner(net, **kwargs):
 
     dispatch_storage(net, strategy='battery_first')
     runpp(net, max_iteration=40)
-    print(net.storage)
 
     ts = net["_timestep"]
 
@@ -136,28 +135,30 @@ def optimizer_trial(optimizer_params, bus_index):
                                 controllable=True)
         storage_control = Battery(net=net, element_index=battery1.item())
 
-        hydrogen1 = create_storage(net, bus_index[0] + 3,
+        """hydrogen1 = create_storage(net, bus_index[0] + 3,
                                    name="hydrogen",
                                    max_e_mwh=1000,
                                    p_mw=0,
                                    soc_percent=0,
                                    controllable=True)
-        hydrogen_control = Hydrogen(net=net, element_index=hydrogen1.item())
+        hydrogen_control = Hydrogen(net=net, element_index=hydrogen1.item())"""
 
     if len(optimizer_params) > 1:
         battery2 = create_storage(net, bus_index[1], 
+                                name="battery",
                                 p_mw=0, 
                                 max_p_mw=optimizer_params[1],
                                 max_q_mvar=optimizer_params[1],
                                 min_p_mw=-optimizer_params[1],
-                                min_q_mvar=optimizer_params[1],
-                                max_e_mwh=-optimizer_params[1] * 4,
+                                min_q_mvar=-optimizer_params[1],
+                                max_e_mwh=optimizer_params[1] * 4,
                                 soc_percent=50,
                                 controllable=True)
         storage_control = Battery(net=net, element_index=battery2.item())
 
     if len(optimizer_params) > 2:
         battery3 = create_storage(net, bus_index[2], 
+                                name="battery",
                                 p_mw=0, 
                                 max_p_mw=optimizer_params[2],
                                 max_q_mvar=optimizer_params[2],
@@ -211,16 +212,10 @@ def target_buses():
         err = optimizer_wrapper(optimizer_params)
         maintain_rankings(net, (bus1_idx), err)
 
-        """res = optimize.minimize(optimizer_wrapper, optimizer_params, method='Nelder-Mead', tol=0.0000001)
-        print(f'MSE: {mse_temp}, Results: {res}')
-        if mse_temp < min_cost:
-            min_cost = mse_temp
-            optimized_solution = optimizer_params"""
-
     optimizer_params = [max_discrepancy / 100 / 2, max_discrepancy / 100 / 2]
     for bus1_idx in range(num_buses):    # storage site 1
         for bus2_idx in range(num_buses):   # storage site 2
-            if bus1_idx != bus2_idx:
+            if bus1_idx < bus2_idx:
                 print(f'Optimization: Bus {bus1_idx} and {bus2_idx}')
                 optimizer_wrapper = lambda opt_params: optimizer_trial([x * 100 for x in opt_params], 
                                                                        [bus1_idx, bus2_idx])
@@ -228,44 +223,37 @@ def target_buses():
                 err = optimizer_wrapper(optimizer_params)
                 maintain_rankings(net, (bus1_idx, bus2_idx), err)
 
-                """res = optimize.minimize(optimizer_wrapper, optimizer_params, method='Nelder-Mead')
-                print(f'MSE: {mse_temp}, Results: {res}')
-                if mse_temp < min_cost:
-                    min_cost = mse_temp
-                    optimized_solution = optimizer_params"""
-
-    optimizer_params = [max_discrepancy / 100 / 3, max_discrepancy / 100 / 3]
+    optimizer_params = [max_discrepancy / 100 / 3, max_discrepancy / 100 / 3, max_discrepancy / 100 / 3]
     for bus1_idx in range(num_buses):    # storage site 1
         for bus2_idx in range(num_buses):   # storage site 2
             for bus3_idx in range(num_buses):   # storage site 3
                 # exclude duplicated buses
-                if len([bus1_idx, bus2_idx, bus3_idx]) == len(set([bus1_idx, bus2_idx, bus3_idx])):
+                if bus1_idx < bus2_idx and bus2_idx < bus3_idx:
                     print(f'Optimization: Bus {bus1_idx}, {bus2_idx}, {bus3_idx}')
-                    optimizer_wrapper = lambda opt_params: optimizer_trial([x * 100 for x in [opt_params]], 
+                    optimizer_wrapper = lambda opt_params: optimizer_trial([x * 100 for x in opt_params], 
                                                             [bus1_idx, bus2_idx, bus3_idx])
 
                     err = optimizer_wrapper(optimizer_params)
                     maintain_rankings(net, (bus1_idx, bus2_idx, bus3_idx), err)
 
-                    """res = optimize.minimize(optimizer_wrapper, optimizer_params, method='Nelder-Mead')
-                    print(f'MSE: {mse_temp}, Results: {res}') 
-                    if mse_temp < min_cost:
-                        min_cost = mse_temp
-                        optimized_solution = optimizer_params"""
 
 def optimize_targets():
     global rankings
 
     for bus_list, err in rankings:
         net = init_run()
+        net_stats = energy_analysis(net)
+        max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
 
-        optimizer_params = [bus_list[0]]
-        if len(bus_list) > 1: 
-            optimizer_params.append(bus_list[1])
-        if len(bus_list) > 2: 
-            optimizer_params.append(bus_list[2])
+        # params representing mwh of 1+ batteries, divided by 100 for optimization 
+        if len(bus_list) == 1:
+            optimizer_params = [max_discrepancy / 100] 
+        elif len(bus_list) == 2: 
+            optimizer_params = [max_discrepancy / 100 / 2, max_discrepancy / 100 / 2]
+        elif len(bus_list) == 3: 
+            optimizer_params = [max_discrepancy / 100 / 3, max_discrepancy / 100 / 3, max_discrepancy / 100 / 3]
 
-        optimizer_wrapper = lambda opt_params: optimizer_trial([x * 100 for x in [opt_params]], 
+        optimizer_wrapper = lambda opt_params: optimizer_trial([x * 100 for x in opt_params], 
                                                             list(bus_list))
         res = optimize.minimize(optimizer_wrapper, optimizer_params, method='Nelder-Mead')
         
