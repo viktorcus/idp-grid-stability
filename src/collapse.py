@@ -16,7 +16,8 @@ from tools.test_runner import *
 bus_failures = []
 line_failures = []
 timestep = 0
-test_date = "1/2/2026"
+test_date = "1/6/2026"
+results_dir = ""
 
 def run_collapse_with_extgrid(net, **kwargs):
     """
@@ -25,8 +26,7 @@ def run_collapse_with_extgrid(net, **kwargs):
         External grid connection will supply power during low demand periods and purchase
         power during excess production periods
     """
-    global bus_failures, line_failures, timestep, test_date
-
+    global bus_failures, line_failures, timestep, test_date, results_dir
 
     dispatch_storage(net, strategy='battery_first')
     runpp(net=net, **kwargs)
@@ -36,7 +36,7 @@ def run_collapse_with_extgrid(net, **kwargs):
     line_limits = line_loading_limits(net)
 
     if(len(bus_limits) > 0 or len(line_limits) > 0):
-        graph.plot_powerflow_result(net, test_date, timestep, results_dir="extgrid")
+        graph.plot_powerflow_result(net, test_date, timestep, results_dir=results_dir)
     bus_failures = list(set(bus_failures).union(bus_limits))
     line_failures = list(set(line_failures).union(line_limits))
     timestep += 1
@@ -155,14 +155,16 @@ def energy_analysis(net):
 if __name__ == '__main__':
     # begin by importing the case 30 and the data controllers   
     net = init_run()
-    init_results_dir(net, "collapse\\extgrid") 
-    run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
-    collect_results("collapse\\extgrid", bus_failures, line_failures, test_date)
+    results_dir = "collapse\\extgrid"
+    init_results_dir(net, results_dir) 
+    #run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
+    #collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
     net = init_run()
     net_stats = energy_analysis(net)
     max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
     battery1 = create_storage(net, 6, 
+                             name="battery",
                              p_mw=0, 
                              max_p_mw=max_discrepancy,
                              max_q_mvar=max_discrepancy,
@@ -172,9 +174,10 @@ if __name__ == '__main__':
                              soc_percent=50,
                              controllable=True)
     storage_control = Battery(net=net, element_index=battery1.item())
-    init_results_dir(net, "collapse\\single_storage") 
-    run_timeseries(net, continue_on_divergence=True, max_iteration=80, verbose=True, run=run_collapse_with_extgrid)
-    collect_results("collapse\\single_storage", bus_failures, line_failures, test_date)
+    results_dir = "collapse\\single_storage"
+    init_results_dir(net, results_dir) 
+    #run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
+    #collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
 
     net = init_run()
@@ -182,6 +185,7 @@ if __name__ == '__main__':
     max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
     battery1 = create_storage(net, 6, 
                              p_mw=0, 
+                             name="battery",
                              max_p_mw=max_discrepancy,
                              max_q_mvar=max_discrepancy,
                              min_p_mw=-max_discrepancy,
@@ -190,7 +194,8 @@ if __name__ == '__main__':
                              soc_percent=50,
                              controllable=True)
     storage_control = Battery(net=net, element_index=battery1.item())
-    hydrogen1 = create_storage(net, 10, 
+    hydrogen1 = create_storage(net, 1, 
+                             name="hydrogen",
                              p_mw=0, 
                              max_p_mw=1000,
                              max_q_mvar=1000,
@@ -199,10 +204,11 @@ if __name__ == '__main__':
                              max_e_mwh=10000,
                              soc_percent=0,
                              controllable=True)
-    storage_control = Hydrogen(net=net, element_index=battery1.item())
-    init_results_dir(net, "collapse\\batt_hydr_storage") 
-    run_timeseries(net, continue_on_divergence=True, max_iteration=80, verbose=True, run=run_collapse_with_extgrid)
-    collect_results("collapse\\batt_hydr_storage", bus_failures, line_failures, test_date)
+    storage_control = Hydrogen(net=net, element_index=hydrogen1.item())
+    results_dir = "collapse\\batt_hydr_storage"
+    init_results_dir(net, results_dir) 
+    run_timeseries(net, continue_on_divergence=True, max_iteration=60, verbose=True, run=run_collapse_with_extgrid)
+    collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
 
     """net = init_run()

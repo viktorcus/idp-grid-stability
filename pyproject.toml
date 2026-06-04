@@ -1,0 +1,8 @@
+[project]
+name = "idp"
+version = "0.1.0"
+description = "Source code for IDP Grid Stability Project"
+
+[build-system]
+build-backend = "flit_core.buildapi"
+requires = ["flit_core >=3.2,<4"]

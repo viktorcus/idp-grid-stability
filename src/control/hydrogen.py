@@ -88,9 +88,9 @@ class Hydrogen(control.basic_controller.Controller):
         return self.applied
     
     def write_to_net(self, net):
-        net.storage.at[self.element_index, "p_mw"] = self.p_mw
-        net.storage.at[self.element_index, "q_mvar"] = self.q_mvar
-        net.storage.at[self.element_index, "soc_percent"] = self.soc_percent
+        #net.storage.at[self.element_index, "p_mw"] = self.p_mw
+        #net.storage.at[self.element_index, "q_mvar"] = self.q_mvar
+        #net.storage.at[self.element_index, "soc_percent"] = self.soc_percent
         net.storage.at[self.element_index, "stored_e_mwh"] = self.stored_e_mwh
 
     def control_step(self, net):
@@ -103,6 +103,7 @@ class Hydrogen(control.basic_controller.Controller):
     
     def time_step(self, net, time):
         if self.last_time_step is not None:
+            self.p_mw = net.storage.loc[self.element_index, "p_mw"]
             # adjust change in H2 stored from the last time period to now
             rate_of_change = (self.p_mw * (time-self.last_time_step) * 15 / 60) * self.hydrogen_vol_per_power()
             self.vol_h2_nm3 += rate_of_change

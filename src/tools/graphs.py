@@ -51,6 +51,19 @@ def graph_p_mw(date, net_element, results_dir):
     plt.show()
     ax.figure.savefig(f'..\\results\\{results_dir}\\res_{net_element}\\p_mw.png')
 
+def graph_battery_soc(net, date, results_dir):
+    results = pd.read_csv(f'..\\results\\{results_dir}\\storage\\soc_percent.csv')
+    battery_idx = net.storage[net.storage["name"] == "battery"].index.values
+    results.drop(results.columns[0], axis=1, inplace=True)  # discard timestep column
+    print(results.columns)
+    for col in reversed(results.columns):
+        print(int(col))
+        if int(col) not in battery_idx: results.drop(results.columns[int(col)], axis=1, inplace=True)
+    ax = sb.lineplot(data=results)
+    ax.set(xlabel=f'time step ({date})', ylabel='SOC', title='Battery SOC Percent')
+    plt.show()
+    ax.figure.savefig(f'..\\results\\{results_dir}\\storage\\soc_percent.png')
+
 def plot_powerflow_result(net, date, timestep, results_dir):
     Path(f'..\\results\\{results_dir}\\pf').mkdir(parents=True, exist_ok=True)
     filename = f'..\\results\\{results_dir}\\pf\\pf_graph_{parse_timestep(date, timestep)}.html'

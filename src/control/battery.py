@@ -11,7 +11,7 @@ class Battery(control.basic_controller.Controller):
     
     def __init__(self, net, element_index, data_source=None, p_profile=None, in_service=True,
                  recycle=False, order=0, level=0, min_soc_percent=20, charge_efficiency=0.95, 
-                 discharge_efficiency=0.95, max_soc_percent=100, **kwargs):
+                 discharge_efficiency=0.95, max_soc_percent=90, **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
                          initial_run=True)
         
@@ -64,8 +64,8 @@ class Battery(control.basic_controller.Controller):
         return self.applied
     
     def write_to_net(self, net):
-        net.storage.at[self.element_index, "p_mw"] = self.p_mw
-        net.storage.at[self.element_index, "q_mvar"] = self.q_mvar
+        #net.storage.at[self.element_index, "p_mw"] = self.p_mw
+        #net.storage.at[self.element_index, "q_mvar"] = self.q_mvar
         net.storage.at[self.element_index, "soc_percent"] = self.soc_percent
 
     def control_step(self, net):
@@ -78,12 +78,15 @@ class Battery(control.basic_controller.Controller):
     
     def time_step(self, net, time):
         if self.last_time_step is not None:
+            self.p_mw = net.storage.loc[self.element_index, "p_mw"]
             # adjust state of charge from the last time step to the current
             rate_of_change = (self.p_mw * (time-self.last_time_step) * 15 / 60) / self.max_e_mwh * 100
             if self.p_mw >= 0:
                 self.soc_percent += rate_of_change * self.charge_efficiency 
             else:
                 self.soc_percent += rate_of_change / self.discharge_efficiency
+            
+
 
         # determine the grid's current power requirement to/from the battery
         """net_dupl = net

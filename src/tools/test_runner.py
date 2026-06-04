@@ -33,10 +33,11 @@ def init_results_dir(net, results_dir):
     ow.log_variable("res_line", "loading_percent")
     ow.log_variable("res_ext_grid", "p_mw")
     ow.log_variable("res_storage", "p_mw")
+    ow.log_variable("storage", "soc_percent")
 
     return net
 
-def collect_results(results_dir, bus_failures, line_failures, test_date):
+def collect_results(net, results_dir, bus_failures, line_failures, test_date):
     """
     After a power flow run, produce graphs based on results.
     """
@@ -46,6 +47,7 @@ def collect_results(results_dir, bus_failures, line_failures, test_date):
     print(f'Buses exceeding limits: {bus_failures}')
     print(f'Lines exceeding limits: {line_failures}')
 
+    graph_battery_soc(net, test_date, results_dir)
     line_loading(line_failures, test_date, results_dir)
     bus_vpu(bus_failures, test_date, results_dir)
     graph_p_mw(test_date, "gen", results_dir)
@@ -158,10 +160,6 @@ def percentage_split(net, power_discrepancy, battery_idx, hydrogen_idx, toleranc
 
     
 
-    net.storage[net.storage["name"].tolower() != "hydro"] = 0
-    runpp(net)
-
-
 def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_mw=0.0001):
     """
     Allocate power first to batteries, then any remainder goes to/comes from hydrogen.
@@ -182,14 +180,20 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
             share = battery_dispatch / len(battery_idx)
 
             for idx in battery_idx:
+                max_e_mwh = net.storage.at[idx, "max_soc_percent"] / 100.0 * net.storage.at[idx, "max_e_mwh"]
+                current_e_mwh = net.storage.at[idx, "soc_percent"] / 100.0 * net.storage.at[idx, "max_e_mwh"]
                 limit = net.storage.at[idx, "max_p_mw"]
                 actual = min(share, limit)
+
+                # if the ideal p_mw rate will cause overcharging by the next cycle, 
+                # then set the limit to power the battery only up to the max SOC percent
+                if (actual * 0.25) + current_e_mwh > max_e_mwh:
+                    actual = (max_e_mwh - current_e_mwh) / 0.25
                 net.storage.at[idx, "p_mw"] = actual
                 remaining -= actual
 
         # allocate any power that remains to hydrogen
         if remaining > tolerance_mw:
-
             for idx in hydrogen_idx:
 
                 limit = net.storage.at[idx, "max_p_mw"]
@@ -212,8 +216,15 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
             share = battery_dispatch / len(battery_idx)
 
             for idx in battery_idx:
+                min_e_mwh = net.storage.at[idx, "min_soc_percent"] / 100.0 * net.storage.at[idx, "max_e_mwh"]
+                current_e_mwh = net.storage.at[idx, "soc_percent"] / 100.0 * net.storage.at[idx, "max_e_mwh"]
                 limit = net.storage.at[idx, "min_p_mw"]
                 actual = min(share, -limit)
+
+                # if the ideal p_mw rate will cause overcharging by the next cycle, 
+                # then set the limit to power the battery only up to the max SOC percent
+                if current_e_mwh - (actual * 0.25) < min_e_mwh:
+                    actual = (current_e_mwh - min_e_mwh) / 0.25
                 net.storage.at[idx, "p_mw"] = -actual
                 remaining -= actual
 
