@@ -101,6 +101,7 @@ if __name__ == '__main__':
     max_discrepancy = abs(net_stats["Peak Deficit"])
     print(net_stats)
 
+    print(average_day(net))
 
     results_dir = "collapse\\extgrid"
     init_results_dir(net, results_dir) 

@@ -211,7 +211,6 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
                 actual = min(share, limit)
                 net.storage.at[idx, "p_mw"] = actual
                 remaining -= actual
-                print(f'p_mw   {net.storage.at[idx, "p_mw"]}     reminaing {remaining}')
 
                 if remaining <= tolerance_mw:
                     break
@@ -295,59 +294,80 @@ def average_day(net, span='month', split_weekends=False):
         ctrl = row.object
         excess_columns = ["datetime", "interval_of_day", span]     # to hold columns to be dropped again from the df after completion
 
-        df = ctrl.data_source.df
-        start = pd.Timestamp(f"{YEAR}-01-01 00:00:00")
+        if ctrl.element != "timestep": 
 
-        # extract date info based on the current time interval
-        df["datetime"] = start + pd.to_timedelta(df.index * 15, unit="min")
-        df["interval_of_day"] = (df["datetime"].dt.hour * 4
-            + df["datetime"].dt.minute // 15
-        )
+            df = ctrl.data_source.df
+            start = pd.Timestamp(f"{YEAR}-01-01 00:00:00")
 
-        if split_weekends:  # determine if we also need grouping by weekday/weekend
-            df["day_type"] = df["datetime"].dt.dayofweek.map(
-                lambda x: "Weekend" if x >= 5 else "Weekday"
+            # extract date info based on the current time interval
+            df["datetime"] = start + pd.to_timedelta(df.index * 15, unit="min")
+            df["interval_of_day"] = (df["datetime"].dt.hour * 4
+                + df["datetime"].dt.minute // 15
             )
-            excess_columns.append("day_type")
 
-            if span == 'month':
-                df["month"] = df["datetime"].dt.month
-                montly_profile = (   # group data by month and slice of day
-                    df.groupby(["month", "interval_of_day", "day_type"])
-                    .mean(numeric_only=True)
-                    .reset_index()
+            if split_weekends:  # determine if we also need grouping by weekday/weekend
+                df["day_type"] = df["datetime"].dt.dayofweek.map(
+                    lambda x: "Weekend" if x >= 5 else "Weekday"
                 )
-                avg_profiles[ctrl.element] = montly_profile
-                df.drop(excess_columns, axis=1, inplace=True)
-            elif span == 'quarter':
-                df["quarter"] = df["datetime"].dt.quarter
-                quarterly_profile = (   # group data by quarter and slice of day
-                    df.groupby(["quarter", "interval_of_day", "day_type"])
-                    .mean(numeric_only=True)
-                    .reset_index()
-                )
-                avg_profiles[ctrl.element] = quarterly_profile
-                df.drop(excess_columns, axis=1, inplace=True)
+                excess_columns.append("day_type")
 
-        else:
-            if span == 'month':
-                df["month"] = df["datetime"].dt.month
-                montly_profile = (   # group data by month and slice of day
-                    df.groupby(["month", "interval_of_day"])
-                    .mean(numeric_only=True)
-                    .reset_index()
-                )
-                avg_profiles[ctrl.element] = montly_profile
-                df.drop(excess_columns, axis=1, inplace=True)
-            elif span == 'quarter':
-                df["quarter"] = df["datetime"].dt.quarter
-                quarterly_profile = (   # group data by quarter and slice of day
-                    df.groupby(["quarter", "interval_of_day"])
-                    .mean(numeric_only=True)
-                    .reset_index()
-                )
-                avg_profiles[ctrl.element] = quarterly_profile
-                df.drop(excess_columns, axis=1, inplace=True)
+                if span == 'month':
+                    df["month"] = df["datetime"].dt.month
+                    monthly_profile = (   # group data by month and slice of day
+                        df.groupby(["month", "interval_of_day", "day_type"])
+                        .mean(numeric_only=True)
+                        .reset_index()
+                    )
+                    avg_profiles[ctrl.element] = monthly_profile
+                    df.drop(excess_columns, axis=1, inplace=True)
+                elif span == 'quarter':
+                    df["quarter"] = df["datetime"].dt.quarter
+                    quarterly_profile = (   # group data by quarter and slice of day
+                        df.groupby(["quarter", "interval_of_day", "day_type"])
+                        .mean(numeric_only=True)
+                        .reset_index()
+                    )
+                    avg_profiles[ctrl.element] = quarterly_profile
+                    df.drop(excess_columns, axis=1, inplace=True)
 
+            else:
+                if span == 'month':
+                    df["month"] = df["datetime"].dt.month
+                    monthly_profile = (   # group data by month and slice of day
+                        df.groupby(["month", "interval_of_day"])
+                        .mean(numeric_only=True)
+                        .reset_index()
+                    )
+                    avg_profiles[ctrl.element] = monthly_profile
+                    df.drop(excess_columns, axis=1, inplace=True)
+                elif span == 'quarter':
+                    df["quarter"] = df["datetime"].dt.quarter
+                    quarterly_profile = (   # group data by quarter and slice of day
+                        df.groupby(["quarter", "interval_of_day"])
+                        .mean(numeric_only=True)
+                        .reset_index()
+                    )
+                    avg_profiles[ctrl.element] = quarterly_profile
+                    df.drop(excess_columns, axis=1, inplace=True)
 
-    #print(avg_profiles)
+    return avg_profiles
+
+def extract_monthly_profile(net, profiles: dict, month: int):
+    """
+    Given an object containing monthly profiles for each net element type and all months,
+    Assign the controllers for just a single month
+    """
+    
+    for i, row in net.controller.iterrows():
+        ctrl = row.object
+        if ctrl.element != "timestep":
+
+            df = ctrl.data_source.df
+
+            profile = profiles[ctrl.element][profiles[ctrl.element]["month"] == month]
+            p = profile.drop(["month", "interval_of_day"], axis=1)
+            p = p.reset_index(drop=True)
+            net.controller.loc[i].object.data_source.df = p    
+
+    return net
+    
