@@ -18,7 +18,11 @@ class Solution:
     batt_e_mwh3: float
 
     h2_bus1: int
+    h2_num_electrolyzers1: int
+    h2_num_fuelcells1: int
 
     h2_on2: int
     h2_bus2: int
+    h2_num_electrolyzers2: int
+    h2_num_fuelcells2: int
 

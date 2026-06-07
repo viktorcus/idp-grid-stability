@@ -101,8 +101,6 @@ if __name__ == '__main__':
     max_discrepancy = abs(net_stats["Peak Deficit"])
     print(net_stats)
 
-    print(average_day(net))
-
     results_dir = "collapse\\extgrid"
     init_results_dir(net, results_dir) 
     #run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
@@ -126,7 +124,8 @@ if __name__ == '__main__':
     #collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
 
-    net = init_run(date=net_stats["Peak Surplus Date"])
+    #net = init_run(date=net_stats["Peak Surplus Date"])
+    net = init_run(date="3/3/2024")
     battery1 = create_storage(net, 1, 
                              p_mw=0, 
                              name="battery",
@@ -159,7 +158,7 @@ if __name__ == '__main__':
                              max_e_mwh=10000,
                              soc_percent=0,
                              controllable=True)
-    storage_control = Hydrogen(net=net, element_index=hydrogen1.item())
+    storage_control = Hydrogen(net=net, element_index=hydrogen1.item(), vol_h2_nm3=1e6, num_electrolyzer_units=1000, num_fuel_cell_stacks=1000)
     hydrogen2 = create_storage(net, 9, 
                              name="hydrogen",
                              p_mw=0, 
@@ -170,7 +169,7 @@ if __name__ == '__main__':
                              max_e_mwh=10000,
                              soc_percent=0,
                              controllable=True)
-    storage_control = Hydrogen(net=net, element_index=hydrogen2.item())
+    storage_control = Hydrogen(net=net, element_index=hydrogen2.item(), vol_h2_nm3=1e6, num_electrolyzer_units=1000, num_fuel_cell_stacks=1000)
     results_dir = "collapse\\batt_hydr_storage"
     init_results_dir(net, results_dir) 
     run_timeseries(net, continue_on_divergence=True, max_iteration=60, verbose=True, run=run_collapse_with_extgrid)
