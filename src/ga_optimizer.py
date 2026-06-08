@@ -14,7 +14,7 @@ from pymoo.optimize import minimize
 from tools.ga.solution import Solution
 import multiprocessing
 from pymoo.parallelization.starmap import StarmapParallelization
-from pymoo.termination.max_gen import MaximumGenerationTermination
+from pymoo.operators.sampling.rnd import FloatRandomSampling
 import sys
 import dill
         
@@ -114,7 +114,11 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
                                 soc_percent=0,
                                 vol_h2_nm3=500,
                                 controllable=True)
-    storage_control = Hydrogen(net=net, element_index=hydrogen1.item())
+    storage_control = Hydrogen(
+                                net=net, 
+                                element_index=hydrogen1.item(), 
+                                num_electrolyzer_units=solution.h2_num_electrolyzers1, 
+                                num_fuel_cell_stacks=solution.h2_num_fuelcells1)
     hydrogen2 = create_storage(net, bus=solution.h2_bus2, 
                                 name="hydrogen",
                                 p_mw=0, 
@@ -126,11 +130,14 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
                                 soc_percent=0,
                                 vol_h2_nm3=500,
                                 controllable=True)
-    storage_control = Hydrogen(net=net, element_index=hydrogen2.item())
+    storage_control = Hydrogen(net=net, 
+                               element_index=hydrogen2.item(), 
+                                num_electrolyzer_units=solution.h2_num_electrolyzers2, 
+                                num_fuel_cell_stacks=solution.h2_num_fuelcells2)
 
     
-    run_timeseries(net, continue_on_divergence=False, max_iteration=40, run=timeseries_runner, verbose=True, time_steps=range(0,96))    
-    return sum(bus_violation_cost.values()) + sum(line_violation_cost.values()) + sum(ext_grid_penalty_cost.values() + sum(price_penalty_cost.values()))
+    run_timeseries(net, continue_on_divergence=False, max_iteration=40, run=timeseries_runner, verbose=True, time_steps=range(0,96))  
+    return sum(bus_violation_cost.values()) + sum(line_violation_cost.values()) + sum(ext_grid_penalty_cost.values()) + sum(price_penalty_cost.values())
 
 def bus_violations(net):
     """
@@ -217,15 +224,27 @@ if __name__ == '__main__':
     net_stats = energy_analysis(net)
     print(net_stats)
     max_discrepancy = net_stats["Peak Deficit"]
-
     monthly_profiles = average_day(net)
 
-    algorithm = GA(pop_size=120)
+    algorithm = GA(pop_size=12)
+
+    start_pop = None
+
     if "-cont" in sys.argv:
         with open("checkpoint.pkl", "rb") as f:
-            algorithm = dill.load(f)
-            algorithm.termination = MaximumGenerationTermination(algorithm.n_gen + 3)
+            ckpt = dill.load(f)
 
+        start_pop = ckpt["pop"]
+
+        algorithm = GA(
+            pop_size=12,
+            sampling=start_pop,
+            eliminate_duplicates=True
+        )
+    else:
+        algorithm = GA(pop_size=12, sampling=FloatRandomSampling())
+
+    termination = ('n_gen', 3)
 
     result = []
 
@@ -236,16 +255,24 @@ if __name__ == '__main__':
         runner = StarmapParallelization(pool.starmap)
 
         problem = GridPlanningProblem(ga_evaluate=ga_evaluator, max_p_mw=abs(net_stats["Peak Deficit"]), elementwise_runner=runner)
-        result = minimize(problem, algorithm, termination=('n_gen',3), verbose=True, copy_algorithm=not continued_flag, save_history=True)
+        result = minimize(problem, algorithm, verbose=True, termination=termination, copy_algorithm=not continued_flag, save_history=True)
     # otherwise, execute as only a single process 
     else:
         problem = GridPlanningProblem(ga_evaluate=ga_evaluator, max_p_mw=abs(net_stats["Peak Deficit"]))
-        result = minimize(problem, algorithm, termination=('n_gen',1), verbose=True, copy_algorithm=not continued_flag, save_history=True)
+        result = minimize(problem, algorithm, verbose=True, termination=termination, copy_algorithm=not continued_flag, save_history=True)
 
     with open("checkpoint.pkl", "wb") as f:
-        dill.dump(algorithm, f)
+        dill.dump({
+            "pop": result.pop,             
+            "n_gen": result.algorithm.n_gen,
+            "xl": problem.xl,
+            "xu": problem.xu,
+        }, f)
 
     print(f'Oprimized result: {result.X}')
+
+    if "gdrive" in os.getcwd():     # close multiprocess pools
+        pool.close()
     
 
 

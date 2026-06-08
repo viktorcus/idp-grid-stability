@@ -6,7 +6,7 @@ class Hydrogen(control.basic_controller.Controller):
     """
     
     def __init__(self, net, element_index, data_source=None, p_profile=None, in_service=True,
-                 electrolyzer_p_per_vol=6.8 / 1000, p_kw_compression=75 / 1000, compress_flowrate=3500, recycle=False, order=0, level=0,
+                 electrolyzer_e_per_vol=6.8 / 1000, p_kw_compression=75 / 1000, compress_flowrate=3500, recycle=False, order=0, level=0,
                  tank_capacity_kg=4.5, vol_h2_nm3=0, num_electrolyzer_units=1, num_fuel_cell_stacks=1, fc_stack_output_mw=-225 / 1000,
                  fuel_cell_efficiency=0.6, electrolyzer_vol_per_h=6, **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
@@ -31,7 +31,7 @@ class Hydrogen(control.basic_controller.Controller):
         self.min_p_mw = net.storage.at[element_index, "min_p_mw"]
         self.min_q_mvar = net.storage.at[element_index, "min_q_mvar"]
 
-        self.electrolyzer_p_per_vol = electrolyzer_p_per_vol    # MWh/Nm3
+        self.electrolyzer_e_per_vol = electrolyzer_e_per_vol    # MWh/Nm3
         self.electrolyzer_vol_per_h = electrolyzer_vol_per_h    # Nm3/h
         self.p_kw_compression = p_kw_compression        # MW
         self.compress_flowrate = compress_flowrate        # Nm3/hr
@@ -77,7 +77,7 @@ class Hydrogen(control.basic_controller.Controller):
     def total_energy_per_nm3(self):
         """returns the MWh required per Nm3 H2 including compression"""
         compression_energy = self.p_kw_compression / self.compress_flowrate
-        return self.electrolyzer_p_per_vol + compression_energy
+        return self.electrolyzer_e_per_vol + compression_energy
     
     def hydrogen_nm3_per_mwh(self):
         return 1 / self.total_energy_per_nm3()
