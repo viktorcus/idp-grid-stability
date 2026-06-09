@@ -1,7 +1,5 @@
 from pandapower import control
-from pandapower.run import runopp, runpp
-from pandapower.diagnostic import Diagnostic
-import math
+import pandas as pd
 
 class Battery(control.basic_controller.Controller):
     """
@@ -26,6 +24,9 @@ class Battery(control.basic_controller.Controller):
             max_soc_percent=90, 
             charge_efficiency=0.95, 
             discharge_efficiency=0.95, 
+
+            # cost characteristics
+            battery_cost_per_mwh=200 * 1000,       # EUR/MWh (converted from EUR/kWh)
             
             **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
@@ -58,6 +59,7 @@ class Battery(control.basic_controller.Controller):
         self.max_soc_percent = max_soc_percent
         self.charge_efficiency = charge_efficiency
         self.discharge_efficiency = discharge_efficiency
+        self.battery_cost_per_mwh = battery_cost_per_mwh
 
         # add these to grid-available data        
         net.storage.at[self.element_index, "max_soc_percent"] = self.max_soc_percent
@@ -78,6 +80,21 @@ class Battery(control.basic_controller.Controller):
     def control_step(self, net):
         self.write_to_net(net)
         self.applied = True
+
+    def create_cost_element(self, net):
+        if net.poly_cost.query(f'et == "battery" and element == "{self.element_index}"').empty:
+            # create relevant poly_cost elements based on the associated costs of battery elements
+                net.poly_cost.loc[len(net.poly_cost.index)] = [
+                    self.element_index,                              # element
+                    "battery",                                  # et
+                    self.battery_cost_per_mwh * self.max_e_mwh, 
+                    0,                                          # cp1_eur_per_mw
+                    0,                                          # cp2_eur_per_mw2
+                    0,                                          # cq0_eur
+                    0,                                          # cq1_eur_per_mvar
+                    0                                           # cq2_eur_per_mvar2
+            ]
+        return net.poly_cost
 
     
     def time_step(self, net, time):

@@ -93,23 +93,23 @@ def dispatch_storage(net, tolerance_mw=0.0001, strategy='', hydrogen_percentage=
                 net.storage.loc[idx]["soc_percent"]>= net.storage.loc[idx]["min_soc_percent"])
     ]
 
-    if strategy == 'battery_first':
-        battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_mw, hydrogen_percentage)
-    elif strategy == 'percentage_split':
-        percentage_split(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_mw, hydrogen_percentage)
+    calculate_power_allocations(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_mw, hydrogen_percentage)
 
 
-
-def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_mw=0.0001, hydrogen_percentage=None):
+def calculate_power_allocations(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_mw=0.0001, hydrogen_percentage=None):
     """
-    Allocate power first to batteries, then any remainder goes to/comes from hydrogen.
+    Allocate power to batteries and hydrogen.
+    If a hydrogen_percentage value is provided, then that percentage will be allocated to 
+    H2 when charging (or as close as possible, depending on availability), and the rest goes to battery 
+    If no hydrogen_percentage value is provided, then we focus on charging short-term storage (battery) first, 
+    and then allocate any remainder to H2
+    In either case, power discharge is taken from batteries first, to prioritize it as a short-term storage option
     """
 
     remaining = abs(power_discrepancy)
     battery_limits = {}
 
-    if power_discrepancy > 0:
-
+    if power_discrepancy > 0:       # charging
 
         for idx in battery_idx:
             max_e_mwh = (
@@ -133,10 +133,11 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
         total_available = sum(battery_limits.values())
 
         battery_dispatch = min(
-            remaining,
+            remaining * ((1-hydrogen_percentage) / 100 if hydrogen_percentage is not None else 1),
             total_available,
         )
 
+        # allocate power to battery based on their available proportion of energy storage capacity
         if total_available > 0:
             for idx in battery_idx:
                 weight = battery_limits[idx] / total_available
@@ -155,13 +156,20 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
             for idx in hydrogen_idx:
                 limit = net.storage.at[idx, "max_p_mw"]
                 actual = min(remaining, limit)
-                net.storage.at[idx, "p_mw"] = actual
-                remaining -= actual
+                projected_e_mwh = net.storage.at[idx, "stored_e_mwh"] + (actual * 0.25)
+
+                # check if the amount to be charged is not greater than our remaining capacity
+                if projected_e_mwh > net.storage.at[idx, "max_e_mwh"]:
+                    net.storage.at[idx, "p_mw"] = actual
+                    remaining -= actual
+                else:
+                    actual = (net.storage.at[idx, "max_e_mwh"] - net.storage.at[idx, "stored_e_mwh"]) / 0.25
+                    net.storage.at[idx, "p_mw"] = -actual
 
                 if remaining <= tolerance_mw:
                     break
     
-    else:       # discharge BESS
+    else:       # discharging
         # draw power from batteries first
         for idx in battery_idx:
             min_e_mwh = (
@@ -205,12 +213,15 @@ def battery_first(net, power_discrepancy, battery_idx, hydrogen_idx, tolerance_m
             )
 
             for idx in hydrogen_idx:
-
                 limit = net.storage.at[idx, "min_p_mw"]
                 actual = min(remaining, -limit)
+
+                # check if amount to be discharged is not greater than the amount we have stored
                 if net.storage.at[idx, "stored_e_mwh"] >= abs(actual * 0.25):
                     net.storage.at[idx, "p_mw"] = -actual
                     remaining -= actual
+                # if target power is above limits, but there some energy stored, then allocate up to the point
+                # that will drain the hydrogen resources 
                 elif net.storage.at[idx, "stored_e_mwh"] > 0:
                     actual = net.storage.at[idx, "stored_e_mwh"] / 0.25
                     net.storage.at[idx, "p_mw"] = -actual

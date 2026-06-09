@@ -26,60 +26,7 @@ def net_element(net, net_element_: _NET_ELEMENT):
             return net.storage
         case "poly_cost":
             return net.poly_cost
-
-
-def csv_to_net(net, net_element_ : _NET_ELEMENT = "load"):
-    """
-        Provided a set of CSVs representing a timeseries of load data, parses these and allocates them evenly 
-        across a net with a variable number of loads.
-        Makes the assumption that only one instance of each load profile is being processed in the network, and 
-        that there is no preference to which node the load profile belongs to.
-    """
-    profile_df = pd.read_csv(f'../data/{net_element_}_profiles/csv/{net_element_}_profiles_joined.csv')
-    num_profiles = len(profile_df.columns) - 1
-    num_spaces = len(net_element(net, net_element_))
-
-
-    # insufficient load profiles
-    if num_spaces < num_profiles:
-        raise IndexError(f'{net_element_} profiles ({num_profiles}) exceed number of spaces available in net ({num_spaces})')
-    
-    # number of loads in the net is a multiple of the number of load profiles:
-    # loads can all be split the same number of ways
-    elif num_spaces % num_profiles == 0:
-        allocations = num_spaces / num_profiles
-
-        for i in range(1, num_profiles):
-            pd.to_numeric(profile_df.iloc[:,i])
-            profile_df.iloc[:,i] = profile_df.iloc[:,i] / allocations
-
-            for p in range(allocations):
-                profile_df[f'{profile_df.columns.values[i]} {p+2}'] = profile_df.iloc[:,i]
-
-    # number of loads in the net is not a multiple of the number of load profiles:
-    # a modules m number of load profiles will be divided by a factor of the whole number n + 1, the rest are divided by a factor of n
-    else:
-        for i in range(1, (num_spaces % num_profiles) + 1):
-            allocations = num_spaces // num_profiles
-            pd.to_numeric(profile_df.iloc[:,i])
-            profile_df.iloc[:,i] = (profile_df.iloc[:,i] / float(allocations))
-
-            for p in range(allocations):
-                profile_df[f'{profile_df.columns.values[i]} {p+2}'] = profile_df.iloc[:,i]
-
-        for i in range((num_spaces % num_profiles) + 1, num_profiles + 1):
-            allocations = num_spaces // num_profiles -1
-            pd.to_numeric(profile_df.iloc[:,i])
-            profile_df.iloc[:,i] = profile_df.iloc[:,i] / allocations
-
-            for p in range(allocations):
-                profile_df[f'{profile_df.columns.values[i]} {p+2}'] = profile_df.iloc[:,i]
-
-    ds = DFData(profile_df.iloc[:,1:])
-    return ConstControl(net, element=net_element_, variable='p_mw' if net_element_ != 'poly_cost' else 'cp1_eur_per_mw', 
-                        data_source=ds, element_index=net_element(net, net_element_).index, 
-                        profile_name=net_element(net, net_element_).index)
-
+        
 
 def json_to_net_generic(net, net_element_: _NET_ELEMENT = "load", limit: int = None, date = None):
     """
@@ -114,6 +61,8 @@ def json_to_net_generic(net, net_element_: _NET_ELEMENT = "load", limit: int = N
         # because tariff data is provided in hourly intervals, pad out rows to create 15-minute intervals like other data 
         if net_element_ == "poly_cost":
             loading_df = pd.DataFrame(np.repeat(loading_df.values, repeats=4, axis=0), columns=loading_df.columns)
+            net.poly_cost = net.poly_cost.query("et == 'ext_grid'")
+            net.poly_cost.at[0, "cp2_eur_per_mw2"] = 0
 
         # non-tariff types may need service switched on or off depending on data provided
         elif len(data["data"]) < len(net_element(net, net_element_)) and net_element_ != "poly_cost":
@@ -165,16 +114,27 @@ def json_to_net_hydro(net, limit: int = None, date = None):
             d = data["data"][idx]
 
             # add each profile for that node with scaling
-            for profile_name, profile_count in d["profiles"].items():
+            for profile_name, scaling in d["profiles"].items():
                 if profile_name.lower() == "hydro":
-                    create_storage(net, 
-                            p_mw = profile_df[profile_name][0] * profile_count,
-                            max_e_mwh=profile_count, sn_mva=0, soc_percent=50,
+                    hydro_idx = create_storage(net, 
+                            p_mw = profile_df[profile_name][0] * scaling,
+                            max_e_mwh=scaling, sn_mva=0, soc_percent=50,
                             bus=d["bus_index"] - 1, name="hydro")
+                    net.poly_cost.loc[len(net.poly_cost.index)] = [
+                        hydro_idx.item(),    # element
+                        "hydro",    # et
+                        20000,      # fixed: 20,000 EUR/year
+                        0,          # cp1_eur_per_mw
+                        0,          # cp2_eur_per_mw2
+                        0,          # cq0_eur
+                        0,          # cq1_eur_per_mvar
+                        0           # cq2_eur_per_mvar2
+                    ]
+
                     if len(loading_df.columns) > idx:
-                        loading_df[idx] += profile_df[profile_name] * profile_count * -1
+                        loading_df[idx] += profile_df[profile_name] * scaling * -1
                     else:
-                        loading_df[len(loading_df.columns)] = profile_df[profile_name] * profile_count * -1
+                        loading_df[len(loading_df.columns)] = profile_df[profile_name] * scaling * -1
 
             # once all profiles are added to a node, convert from kw to mw if needed
             if "units" in data and data["units"] == "kw":
@@ -223,9 +183,21 @@ def json_to_net_pv(net, limit: int = None, date = None):
             d = data["data"][idx]
 
             # add each profile for that node with scaling
-            for profile_name, profile_count in d["profiles"].items():
+            for profile_name, scaling in d["profiles"].items():
                 if profile_name.lower() == "pv":
-                    loading_df[idx] += profile_df[profile_name] * profile_count
+                    loading_df[idx] += profile_df[profile_name] * scaling
+                    net.poly_cost.loc[len(net.poly_cost.index)] = [
+                        idx,    # element
+                        "pv",   # et
+                        # EUR/kWp * kwp OR EUR/kWp * MWp * 1000 kW/MW
+                        scaling * 550  * 
+                            (1000 if "units" in data and data["units"].lower() == "mw" else 1),  # cp0_eur (EUR/kWp * kwp OR EUR/kWp * MWp * 1000 kW/MW)
+                        0,      # cp1_eur_per_mw
+                        0,      # cp2_eur_per_mw2
+                        0,      # cq0_eur
+                        0,      # cq1_eur_per_mvar
+                        0       # cq2_eur_per_mvar2
+                    ]
                 elif "pv" not in d["profiles"].items():
                     net.gen.loc[idx, "in_service"] = False
 
