@@ -5,10 +5,41 @@ class Hydrogen(control.basic_controller.Controller):
     Baseline hydrogen class
     """
     
-    def __init__(self, net, element_index, data_source=None, p_profile=None, in_service=True,
-                 electrolyzer_e_per_vol=6.8 / 1000, p_kw_compression=75 / 1000, compress_flowrate=3500, recycle=False, order=0, level=0,
-                 tank_capacity_kg=4.5, vol_h2_nm3=0, num_electrolyzer_units=1, num_fuel_cell_stacks=1, fc_stack_output_mw=-225 / 1000,
-                 fuel_cell_efficiency=0.6, electrolyzer_vol_per_h=6, **kwargs):
+    def __init__(
+            # controller required parameters
+            self, 
+            net, 
+            element_index, 
+            data_source=None, 
+            p_profile=None, 
+            in_service=True, 
+            recycle=False, 
+            order=0, 
+            level=0,
+
+            # electrolyzer parameters 
+            electrolyzer_e_per_vol= 6.8 / 1000,     # MWh/Nm3 (converted from kWh/Nm3)
+            num_electrolyzer_units=1,               # multiplier for electrolyzer data
+            electrolyzer_vol_per_h=6,               # Nm3/h
+            electrolyzer_cost=4600 * 1000,          # EUR/kW (converted from EUR/MW)
+            # 6.8 MWh/Nm3 * 6 Nm3/h = 40.8 MW power drawn for electrolysis
+
+            # compressor parameters
+            p_kw_compression= 75 / 1000,            # MW (converted from kW)
+            compress_flowrate=3500,                 # Nm3/h
+            compressor_cost=75000,                  # EUR (single cost)
+
+            # tank and volume parameters
+            tank_capacity_kg=4.5, 
+            vol_h2_nm3=0, 
+
+            # fuel cell stack parameters
+            num_fuel_cells=1,                       # multiplier for fuel cell stack data
+            fc_stack_output_mw=-225 / 1000,         # MW (converted from kW and negated due to discharging)
+            fuel_cell_efficiency=0.6,               # multiplier used when calculating storage depletion during discharging
+            fuel_cell_cost=0.6
+            
+            **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
                          initial_run=True)
         
@@ -23,7 +54,7 @@ class Hydrogen(control.basic_controller.Controller):
         self.in_service = net.storage.at[element_index, "in_service"]
         self.applied = False
 
-        # specific attributes
+        # storage element attributes
         self.max_e_mwh = net.storage.at[element_index, "max_e_mwh"]
         self.soc_percent = net.storage.at[element_index, "soc_percent"] 
         self.max_p_mw = net.storage.at[element_index, "max_p_mw"]
@@ -31,28 +62,35 @@ class Hydrogen(control.basic_controller.Controller):
         self.min_p_mw = net.storage.at[element_index, "min_p_mw"]
         self.min_q_mvar = net.storage.at[element_index, "min_q_mvar"]
 
-        self.electrolyzer_e_per_vol = electrolyzer_e_per_vol    # MWh/Nm3
-        self.electrolyzer_vol_per_h = electrolyzer_vol_per_h    # Nm3/h
-        self.p_kw_compression = p_kw_compression        # MW
-        self.compress_flowrate = compress_flowrate        # Nm3/hr
-        self.tank_capacity_kg  = tank_capacity_kg       # kg
+        # hydrogen constants
         self.lhv_h2 = 33.3 / 1000     # MWh/kg
         self.density_h2 = 0.0899    # kg/Nm^3
-        self.vol_h2_nm3 =  vol_h2_nm3   # if assuming we start with some predefined amount already stored
+
+        # electrolyzer data
+        self.electrolyzer_e_per_vol = electrolyzer_e_per_vol    # MWh/Nm3
+        self.electrolyzer_vol_per_h = electrolyzer_vol_per_h    # Nm3/h
         self.num_electrolyzer_units = num_electrolyzer_units
-        self.num_fuel_cell_stacks = num_fuel_cell_stacks
+
+        # compressor data
+        self.p_kw_compression = p_kw_compression        # MW
+        self.compress_flowrate = compress_flowrate        # Nm3/hr
+
+        # tank and volume data
+        self.tank_capacity_kg  = tank_capacity_kg       # kg
+        self.vol_h2_nm3 =  vol_h2_nm3   # if assuming we start with some predefined amount already stored
         self.stored_e_mwh = vol_h2_nm3 * self.density_h2 * self.lhv_h2
+
+        # fuel cell stack data
+        self.num_fuel_cells = num_fuel_cells
         self.fc_stack_output_mw = fc_stack_output_mw        # MW
         self.fuel_cell_efficiency = fuel_cell_efficiency
-        self.charging = False
-        self.discharging = False
 
         # profile attributes
         self.data_source = data_source
         self.p_profile = p_profile
         self.last_time_step = None
 
-        # write these back to net
+        # storage elemenet attributres, calculated based on provided data: write these back to net
         self.max_p_mw = self.get_max_power_draw()
         net.storage.at[self.element_index, "max_p_mw"] = self.max_p_mw
         self.min_p_mw = self.get_max_power_out()
@@ -72,7 +110,7 @@ class Hydrogen(control.basic_controller.Controller):
     def get_max_power_out(self):
         """ returns the max power that can be taken from fuel cell consumption, based on the rated power of the fuel cell stack
          and the fuel cell stack efficiency"""
-        return self.fc_stack_output_mw * self.num_fuel_cell_stacks
+        return self.fc_stack_output_mw * self.num_fuel_cells
     
     def total_energy_per_nm3(self):
         """returns the MWh required per Nm3 H2 including compression"""
@@ -89,7 +127,6 @@ class Hydrogen(control.basic_controller.Controller):
     def get_stored_energy(self):
         return self.vol_h2_nm3 * self.density_h2 * self.lhv_h2
 
-    
     def check_capacity_available(self, p_mw, timestep_rate = 0.25):
         """ 
         When evaluating whether to consume H2 storage for the grid, first check if stored supply is available.
@@ -113,21 +150,18 @@ class Hydrogen(control.basic_controller.Controller):
         return self.applied
     
     def write_to_net(self, net):
+        """ after making calculations in here, write these back to net """
         net.storage.at[self.element_index, "stored_e_mwh"] = self.stored_e_mwh
 
     def control_step(self, net):
         self.write_to_net(net)
         self.applied = True
 
-        self.charging = True if self.p_mw > 0 else False
-        self.discharging = True if self.p_mw < 0 else False
-
     
     def time_step(self, net, time):
         if self.last_time_step is not None:
-
+            # update the values after a successful increment in time step
             dt_hr = (time - self.last_time_step) * 0.25
-
             self.p_mw = net.storage.at[self.element_index, "p_mw"]
 
             if self.p_mw > 0:   # Electrolyzer mode
