@@ -21,7 +21,7 @@ class Hydrogen(control.basic_controller.Controller):
             electrolyzer_mwh_per_vol= 6.8 / 1000,     # MWh/Nm3 (converted from kWh/Nm3)
             num_electrolyzer_units=1,               # multiplier for electrolyzer data
             electrolyzer_vol_per_h=6,               # Nm3/h
-            electrolyzer_cost_per_mw=4600 * 1000,   # EUR/MW (converted from EUR/MW)
+            electrolyzer_cost_per_mw=4600 * 1000,   # EUR/MW (converted from EUR/kW)
             # 6.8 MWh/Nm3 * 6 Nm3/h = 40.8 MW power drawn for electrolysis
 
             # compressor parameters
@@ -32,14 +32,14 @@ class Hydrogen(control.basic_controller.Controller):
             # tank and volume parameters
             tank_capacity_kg=4.5, 
             vol_h2_nm3=0, 
-            tank_cost_per_kg=600 * 1000,                   # EUR/kg
+            tank_cost_per_kg=600,                   # EUR/kg
             num_tanks=1,                            # multiplier for tank data
 
             # fuel cell stack parameters
             num_fuel_cells=1,                       # multiplier for fuel cell stack data
             fc_stack_output_mw=-225 / 1000,         # MW (converted from kW and negated due to discharging)
             fuel_cell_efficiency=0.6,               # multiplier used when calculating storage depletion during discharging
-            fuel_cell_cost_per_mw=2400 * 1000,             # EUR/MW (converted from EUR/kW)
+            fuel_cell_cost_per_mw=2400 * 1000,      # EUR/MW (converted from EUR/kW)
             
             **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
@@ -83,8 +83,11 @@ class Hydrogen(control.basic_controller.Controller):
         self.tank_capacity_kg  = tank_capacity_kg       # kg
         self.tank_cost_per_kg = tank_cost_per_kg
         self.num_tanks = num_tanks
-        self.vol_h2_nm3 =  vol_h2_nm3   # if assuming we start with some predefined amount already stored
-        self.stored_e_mwh = vol_h2_nm3 * self.density_h2 * self.lhv_h2
+        if self.soc_percent > 0 and vol_h2_nm3 == 0:
+            self.vol_h2_nm3 = self.soc_percent * num_tanks * tank_capacity_kg / self.density_h2
+        else:
+            self.vol_h2_nm3 = vol_h2_nm3
+        self.stored_e_mwh = self.vol_h2_nm3 * self.density_h2 * self.lhv_h2
 
         # fuel cell stack data
         self.num_fuel_cells = num_fuel_cells
@@ -129,10 +132,6 @@ class Hydrogen(control.basic_controller.Controller):
     
     def hydrogen_nm3_per_mwh(self):
         return 1 / self.total_energy_req_per_nm3()
-    
-    def number_tanks(self):
-        """ returns the number of tanks H2 that we would expect to have, based on the stored kg of hydrogen"""
-        return self.vol_h2_nm3 * self.density_h2 / self.tank_capacity_kg
     
     def get_stored_energy(self):
         return self.vol_h2_nm3 * self.density_h2 * self.lhv_h2

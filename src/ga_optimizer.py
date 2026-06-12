@@ -9,6 +9,7 @@ from pandapower.run import runpp
 from pandapower.timeseries.run_time_series import run_timeseries
 from pandapower.networks.power_system_test_cases import case30
 from pandapower.create import create_storage
+from pandapower import LoadflowNotConverged
 
 import profileloader as pl
 
@@ -49,6 +50,14 @@ max_discrepancy = 0
 
 monthly_profiles = {}
 iteration_counter = 0
+
+weights = {
+    "bus": 0.3,
+    "line": 0.3,
+    "grid_penalty": 0,
+    "grid_price": 0.2,
+    "components": 0.2
+}
 
 
 def init_run(date=None):
@@ -134,8 +143,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
                                 min_p_mw=-1000,
                                 min_q_mvar=-1000,
                                 max_e_mwh=10000,
-                                soc_percent=0,
-                                vol_h2_nm3=500,
+                                soc_percent=50,
                                 controllable=True)
     storage_control = Hydrogen(
                                 net=net, 
@@ -154,8 +162,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
                                     min_p_mw=-1000,
                                     min_q_mvar=-1000,
                                     max_e_mwh=10000,
-                                    soc_percent=0,
-                                    vol_h2_nm3=500,
+                                    soc_percent=50,
                                     controllable=True)
         storage_control = Hydrogen(net=net, 
                                 element_index=hydrogen2.item(), 
@@ -174,15 +181,19 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     def local_runner(net, **kwargs):
         timeseries_runner(net, acc)
 
-    run_timeseries(net, continue_on_divergence=False, max_iteration=40, run=local_runner, verbose=True, time_steps=range(0,96))  
+    try:
+        run_timeseries(net, continue_on_divergence=False, max_iteration=20, run=local_runner, verbose=False, time_steps=range(0,96))  
+    except LoadflowNotConverged as e:
+        return (1 - (net["_timestep"]  / 96)) * 1000
+    
     total = (
-        acc["bus"]
-        + acc["line"]
-        + acc["grid_penalty"]
-        + acc["grid_price"]
-        + grid_component_prices(net)
+        acc["bus"] * weights["bus"]
+        + acc["line"] * weights["line"]
+        + acc["grid_penalty"] * weights["grid_penalty"]
+        + acc["grid_price"] * weights["grid_price"]
+        + grid_component_prices(net) * weights["components"]
     )
-    print(f'bus err: {acc["bus"]}   line err: {acc["line"]}  grid reliance penalty:  {acc["grid_penalty"]}   grid prices: {acc["grid_price"]}   components: {grid_component_prices(net)}   total cost {total}')    
+    print(f'bus err: {acc["bus"] * weights["bus"]}   line err: {acc["line"] * weights["line"]}  price penalty:  {acc["grid_price"] * weights["grid_price"]}    components: {grid_component_prices(net) * weights["components"]}   total cost {total}')    
     
     return total
 
@@ -198,7 +209,9 @@ def bus_violations(net):
     under_voltage = np.maximum(0.0, vmin - vm)
 
     voltage_violation = over_voltage + under_voltage
-    return np.sum((10 * voltage_violation) ** 2)
+    regularized_voltage_violation = [voltage / 0.95 for voltage in voltage_violation]
+    bus_results = np.sum(regularized_voltage_violation) / len(net.res_bus)
+    return bus_results
 
 def line_violations(net):
     """
@@ -208,7 +221,9 @@ def line_violations(net):
     max_loading = net.line.max_loading_percent.values
 
     line_violation = np.maximum(0.0, loading - max_loading)
-    return np.sum(line_violation ** 2)
+    regularized_line_violation = [line / 100 for line in line_violation]
+    line_results = np.sum(regularized_line_violation) / len(net.res_line)
+    return line_results 
 
 def grid_penalty(net):
     """
@@ -219,20 +234,38 @@ def grid_penalty(net):
     return np.sum(net.res_ext_grid.p_mw / max_discrepancy) ** 2
 
 def ext_grid_prices(net):
-    return abs(net.poly_cost[net.poly_cost["et"] == "ext_grid"]["cp1_eur_per_mw"].item() * net.res_ext_grid.at[0,"p_mw"])
+    price_paid = net.poly_cost[net.poly_cost["et"] == "ext_grid"]["cp1_eur_per_mw"].item() * net.res_ext_grid.at[0,"p_mw"]
+    return abs(price_paid / (net_stats["Peak Surplus"] * net_stats["Peak Price"]))
 
 def grid_component_prices(net):
-    return net.poly_cost["cp0_eur"].sum()
+    max_poss_penalty = (            # max battery possible in simulation
+            2 *                                 # max num batteries
+            4 *                                 # c-rate
+            net_stats["Peak Deficit"]           # max p_mw
+    ) + 1 * ((                      # max hydrogen possible in simulation
+             9999 *                            # max electrolyzer units
+             4600 * 1000 *                      # electrolyzer EUR/MW
+             6.8 / 1000 *                        # electrolyzer MWh/Nm3
+             6                                  # electrolyzer Nm3/h        
+        ) + (
+            9999 *                             # max tanks
+            4.5 *                               # tank capacity kg
+            600                                 # EUR/kg   
+        ) + (
+            9999 *                             # max num fuel cells
+            225 / 1000 *                        # fuel cell MW
+            2400 * 1000                         # fuel cell EUR/MW
+        ))
+
+    return net.poly_cost[~net.poly_cost["et"].isin(["hydro", "pv"])]["cp0_eur"].sum() / max_poss_penalty
 
 def timeseries_runner(net, acc, **kwargs):
     """
     Wrapper function around the pandapower timeseries. 
     Runs each individial step in the timeseries and extracts the violation costs for each step
     """
-    dispatch_storage(net, strategy='battery_first')
-    runpp(net, max_iteration=40)
-
-    ts = net["_timestep"]
+    dispatch_storage(net, strategy='percentage_split')
+    runpp(net, max_iteration=10, init="dc")
 
     acc["bus"] += bus_violations(net)
     acc["line"] += line_violations(net)
@@ -247,25 +280,27 @@ def ga_evaluator(solution: Solution):
     """
 
     total_cost = 0
-
+    month_var = 1
     try:
         for month in range(1,13):
+            month_var = month
             total_cost += deploy_net_runner(solution, month=month)
         #total_cost += deploy_net_runner(solution, date=net_stats["Peak Surplus Date"])
         #total_cost += deploy_net_runner(solution, date=net_stats["Peak Deficit Date"])
     except Exception as e: 
         # break if the net does not converge on any step in the timeseries, and return the maximum penalty.
-        # print(e)
         # print(traceback.format_exc())
-        return 1e20
+        return 1e12
     return total_cost
 
 
 if __name__ == '__main__':
     continued_flag = "-cont" in sys.argv
+    results_flag = "-results" in sys.argv
     
     net = init_run()
     net_stats = energy_analysis(net)
+
     max_discrepancy = net_stats["Peak Deficit"]
     monthly_profiles = average_day(net)
     
@@ -299,6 +334,10 @@ if __name__ == '__main__':
         algorithm.setup(problem, progress=True, verbose=True, callback=CheckpointCallback())
 
         print(f'loading checkpoint at generation {algorithm.n_gen} eval {algorithm.evaluator.n_eval}')
+    elif results_flag:
+        with open("checkpoint.pkl", "rb") as f:
+            ckpt = dill.load(f)
+        algorithm = ckpt["algorithm"]
     else:
         algorithm = MixedVariableGA(pop_size=120)
         algorithm.termination = get_termination("n_gen", 1)
@@ -313,6 +352,8 @@ if __name__ == '__main__':
         save_history=True,
         callback=CheckpointCallback()
     )
+
+    print(f'Optimized result: {result.X}')
 
     if pool is not None:
         pool.close()

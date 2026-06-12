@@ -68,7 +68,7 @@ def dispatch_storage(net, tolerance_mw=0.0001, strategy='', hydrogen_percentage=
 
     # run initial powerflow to determine how much power discrepancy exists currently based on loads/generation
     net.storage.loc[net.storage["name"] != "hydro", "p_mw"] = 0
-    runpp(net)
+    runpp(net, init="dc")
 
     power_discrepancy = -1 * net.res_ext_grid.p_mw.sum()
 
@@ -133,7 +133,7 @@ def calculate_power_allocations(net, power_discrepancy, battery_idx, hydrogen_id
         total_available = sum(battery_limits.values())
 
         battery_dispatch = min(
-            remaining * ((1-hydrogen_percentage) / 100 if hydrogen_percentage is not None else 1),
+            remaining * ((1-hydrogen_percentage) if hydrogen_percentage is not None else 1),
             total_available,
         )
 
@@ -237,11 +237,14 @@ def energy_analysis(net):
     Analyzes all points in the grid for surplus and deficit data
     """
     totals = 0
+    max_price = 0
     for i, row in net.controller.iterrows():
         ctrl = row.object
         if ctrl.element in ['load', 'storage']:
             totals -= ctrl.data_source.df.sum(axis=1)
-        elif ctrl.element not in ['poly_cost', 'timestep']:
+        elif ctrl.element in ['poly_cost']:
+            max_price = ctrl.data_source.df.iloc[:, 0].max()
+        elif ctrl.element not in ['timestep']:
             totals += ctrl.data_source.df.sum(axis=1)
 
     peak_surplus_interval = totals.idxmax()
@@ -259,7 +262,8 @@ def energy_analysis(net):
         "Peak Deficit Date": peak_deficit_date.strftime("%d/%m/%Y"),
         "Total Surplus": math.ceil((totals.loc[lambda x : x > 0].sum() * .25).item()),
         "Total Deficit": math.ceil((totals.loc[lambda x : x < 0].sum() * .25).item()),
-        "Full Surplus Date": peak_surplus_interval
+        "Peak Price": max_price
+        #"Full Surplus Date": peak_surplus_interval
     }
 
 def average_day(net, span='month', split_weekends=False):

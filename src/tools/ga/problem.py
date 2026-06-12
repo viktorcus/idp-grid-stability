@@ -9,12 +9,12 @@ class GridPlanningProblem(ElementwiseProblem):
     def __init__(self, ga_evaluate, max_p_mw, **kwargs):
 
         self.vars = {
-            "batt_bus1": Integer(bounds=(0, 30)),
+            "batt_bus1": Integer(bounds=(0, 29)),
             "batt_p_mw1": Real(bounds=(0.5, max_p_mw)),
             "batt_e_mwh1": Real(bounds=(2.0, max_p_mw * 4)),
 
             "batt_on2": Binary(), 
-            "batt_bus2": Integer(bounds=(0, 30)),
+            "batt_bus2": Integer(bounds=(0, 29)),
             "batt_p_mw2": Real(bounds=(0.0, max_p_mw)),
             "batt_e_mwh2": Real(bounds=(0.0, max_p_mw * 4)),
 
@@ -23,13 +23,13 @@ class GridPlanningProblem(ElementwiseProblem):
             "batt_p_mw3": Real(bounds=(0.0, max_p_mw)),
             "batt_e_mwh3": Real(bounds=(0.0, max_p_mw * 4)),
 
-            "h2_bus1": Integer(bounds=(0, 30)),
+            "h2_bus1": Integer(bounds=(0, 29)),
             "h2_num_electrolyzers1": Integer(bounds=(0, 10000)),
             "h2_num_fuelcells1": Integer(bounds=(0, 10000)),
             "h2_num_tanks1": Integer(bounds=(0, 10000)),
 
             "h2_on2": Binary(),
-            "h2_bus2": Integer(bounds=(0, 30)),
+            "h2_bus2": Integer(bounds=(0, 29)),
             "h2_num_electrolyzers2": Integer(bounds=(0, 10000)),
             "h2_num_fuelcells2": Integer(bounds=(0, 10000)),
             "h2_num_tanks2": Integer(bounds=(0, 10000))
@@ -137,4 +137,4 @@ class GridPlanningProblem(ElementwiseProblem):
             # g_h2_elec, g_h2_fc, g_h2_t
         ]
 
-        print(f'{out["F"]}:   {sol}')
+        print(f'[{out["F"]}:]   {sol}')
