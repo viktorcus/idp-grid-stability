@@ -37,11 +37,12 @@ def init_results_dir(net, results_dir):
     ow.log_variable("res_ext_grid", "p_mw")
     ow.log_variable("res_storage", "p_mw")
     ow.log_variable("storage", "soc_percent")
-    ow.log_variable("storage", "stored_e_mwh")
+    if 'stored_e_mwh' in net.storage.columns:
+        ow.log_variable("storage", "stored_e_mwh")
 
     return net
 
-def collect_results(net, results_dir, bus_failures, line_failures, test_date):
+def collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario=""):
     """
     After a power flow run, produce graphs based on results.
     """
@@ -51,13 +52,13 @@ def collect_results(net, results_dir, bus_failures, line_failures, test_date):
     print(f'Buses exceeding limits: {bus_failures}')
     print(f'Lines exceeding limits: {line_failures}')
 
-    graph_battery_soc(net, test_date, results_dir)
-    line_loading(line_failures, test_date, results_dir)
-    bus_vpu(bus_failures, test_date, results_dir)
-    graph_p_mw(test_date, "gen", results_dir)
-    graph_p_mw(test_date, "bus", results_dir)
-    graph_p_mw(test_date, "ext_grid", results_dir)
-    graph_p_mw(test_date, "storage", results_dir)
+    graph_battery_soc(net, test_date, results_dir, scenario=scenario)
+    line_loading(line_failures, test_date, results_dir, scenario=scenario)
+    bus_vpu(bus_failures, test_date, results_dir, scenario=scenario)
+    graph_p_mw(test_date, "gen", results_dir, scenario=scenario)
+    graph_p_mw(test_date, "bus", results_dir, scenario=scenario)
+    graph_p_mw(test_date, "ext_grid", results_dir, scenario=scenario)
+    graph_p_mw(test_date, "storage", results_dir, scenario=scenario)
 
 def dispatch_storage(net, tolerance_mw=0.0001, strategy='', hydrogen_percentage=None):
     """
@@ -251,15 +252,32 @@ def energy_analysis(net):
     peak_deficit_interval = totals.idxmin()
 
     start = pd.Timestamp(f"{YEAR}-01-01 00:00:00")
+    timestamps = (
+        start +
+        pd.to_timedelta(totals.index * 15, unit="min")
+    )
+
+    totals.index = timestamps
+
 
     peak_surplus_date = start + pd.Timedelta(minutes=15 * peak_surplus_interval)
     peak_deficit_date = start + pd.Timedelta(minutes=15 * peak_deficit_interval)
 
+    daily_discrepancies_mwh = (totals.resample("D").sum() * 0.25)
+
+    max_surplus_day = daily_discrepancies_mwh.idxmax()
+    max_deficit_day = daily_discrepancies_mwh.idxmin()
+
+
     return {
-        "Peak Surplus": math.ceil(max(totals)), 
+        "Peak Surplus MW": math.ceil(max(totals)), 
         "Peak Surplus Date": peak_surplus_date.strftime("%d/%m/%Y"),
-        "Peak Deficit": math.ceil(min(totals)), 
+        "Peak Deficit MW": math.ceil(min(totals)), 
         "Peak Deficit Date": peak_deficit_date.strftime("%d/%m/%Y"),
+        "Max Surplus MWh": math.ceil(daily_discrepancies_mwh.max()),
+        "Max Surplus Date": max_surplus_day.strftime("%d/%m/%Y"),
+        "Max Deficit MWh": math.ceil(daily_discrepancies_mwh.min()),
+        "Max Deficit Date": max_deficit_day.strftime("%d/%m/%Y"),
         "Total Surplus": math.ceil((totals.loc[lambda x : x > 0].sum() * .25).item()),
         "Total Deficit": math.ceil((totals.loc[lambda x : x < 0].sum() * .25).item()),
         "Peak Price": max_price

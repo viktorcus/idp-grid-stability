@@ -6,7 +6,7 @@ from typing import Literal
 import json
 import numpy as np
 import datetime as dt
-from pandapower.create import create_storage
+from pandapower.create import create_storage, create_line
 
 _NET_ELEMENT = Literal["load", "pv", "hydro", "poly_cost"]
 
@@ -233,3 +233,58 @@ def json_to_net_pv(net, limit: int = None, date = None):
 
     return ConstControl(net, element='gen', variable='p_mw', data_source=ds, 
                         element_index=net.gen.index, profile_name=net.gen.index)
+
+
+def json_to_lines(net):
+    """ replace all lines with 110 kV lines to model inter-city/town connections """
+    net.line.drop(net.line.index, inplace=True)
+
+    json_path = '../data/line_allocations.json'
+    with open(json_path, "r", encoding="utf-8") as f:
+        lines = json.load(f)
+
+    for line in lines:
+        from_bus = line["from"]
+        to_bus = line["to"]
+        length = line["distance"]
+
+        create_line(
+            net,
+            from_bus=from_bus -1,
+            to_bus=to_bus -1,
+            length_km=length,
+            std_type="243-AL1/39-ST1A 110.0",
+            max_loading_percent=100,
+            name=f"{from_bus}-{to_bus}"
+        )
+
+    return net
+
+
+def json_to_bus_coords(net):
+
+    json_path = '../data/bus_coords_allocations.json'
+    with open(json_path, "r", encoding="utf-8") as f:
+        coords = json.load(f)
+
+    for item in coords:
+        bus = item["bus"]
+        geo_string = json.dumps(item["coords"])
+        net.bus.at[bus -1, "geo"] = geo_string
+
+
+    # search out and disable buses with no elements connected
+    used_buses = set()
+
+    if len(net.load): used_buses.update(net.load.bus.values)
+    if len(net.gen): used_buses.update(net.gen.bus.values)
+    if len(net.sgen): used_buses.update(net.sgen.bus.values)
+    if len(net.storage): used_buses.update(net.storage.bus.values)
+    if len(net.ext_grid): used_buses.update(net.ext_grid.bus.values)
+
+    # set unused buses out of service
+    for bus in net.bus.index:
+        if bus not in used_buses:
+            net.bus.at[bus, "in_service"] = False
+
+    return net

@@ -9,6 +9,7 @@ from pandapower.create import create_storage
 from control.battery import Battery
 from control.hydrogen import Hydrogen
 from tools.test_runner import * 
+import traceback
 
 bus_failures = []
 line_failures = []
@@ -25,13 +26,14 @@ def run_collapse_with_extgrid(net, **kwargs):
     """
     global bus_failures, line_failures, timestep, test_date, results_dir
 
-    dispatch_storage(net, strategy='battery_first')
+    dispatch_storage(net, strategy='percentage_split')
 
     try:
-        runpp(net=net, **kwargs)
+        runpp(net=net, init="dc", **kwargs)
     except: 
         diag = Diagnostic()
-        result = diag.diagnose_network(net, report_style="detailed")    
+        result = diag.diagnose_network(net, report_style="detailed")
+        #print(traceback.format_exc())    
 
     # detect buses or lines whose power flow results exceed limits
     bus_limits = bus_vm_pu_limits(net, limits=[0.9,1.1])
@@ -87,6 +89,8 @@ def init_run(date=None):
     gen_control = pl.json_to_net_pv(net, date=date)
     tariff_control = pl.json_to_net_generic(net, "poly_cost", date=date)
     hydro_control = pl.json_to_net_hydro(net, date=date)
+    net = pl.json_to_bus_coords(net)
+    net = pl.json_to_lines(net)
 
     monthly_profiles = average_day(net, span='month')
     #print(monthly_profiles)
@@ -98,7 +102,7 @@ if __name__ == '__main__':
     # begin by importing the case 30 and the data controllers   
     net = init_run(date=None)
     net_stats = energy_analysis(net)
-    max_discrepancy = abs(net_stats["Peak Deficit"])
+    max_discrepancy = abs(net_stats["Peak Deficit MW"])
     print(net_stats)
 
     results_dir = "collapse\\extgrid"
@@ -106,22 +110,19 @@ if __name__ == '__main__':
     #run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
     #collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
+
+    """ ********* FAILURE SCENARIOS ************** """
     net = init_run(date=net_stats["Peak Surplus Date"])
-    battery1 = create_storage(net, 6, 
-                             name="battery",
-                             p_mw=0, 
-                             max_p_mw=max_discrepancy,
-                             max_q_mvar=max_discrepancy,
-                             min_p_mw=-max_discrepancy,
-                             min_q_mvar=-max_discrepancy,
-                             max_e_mwh=max_discrepancy * 4,
-                             soc_percent=50,
-                             controllable=True)
-    storage_control = Battery(net=net, element_index=battery1.item())
-    results_dir = "collapse\\single_storage"
+    results_dir = "collapse\\single_storage_surplus"
     init_results_dir(net, results_dir) 
-    #run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
-    #collect_results(net, results_dir, bus_failures, line_failures, test_date)
+    run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
+    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Surplus Date: ")
+
+    net = init_run(date=net_stats["Peak Deficit Date"])
+    results_dir = "collapse\\single_storage_deficit"
+    init_results_dir(net, results_dir) 
+    run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
+    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Deficit Date: ")
 
 
     #net = init_run(date=net_stats["Peak Surplus Date"])
@@ -172,8 +173,8 @@ if __name__ == '__main__':
     storage_control = Hydrogen(net=net, element_index=hydrogen2.item(), vol_h2_nm3=1e6, num_electrolyzer_units=1000, num_fuel_cell_stacks=1000)
     results_dir = "collapse\\batt_hydr_storage"
     init_results_dir(net, results_dir) 
-    run_timeseries(net, continue_on_divergence=True, max_iteration=60, verbose=True, run=run_collapse_with_extgrid)
-    collect_results(net, results_dir, bus_failures, line_failures, test_date)
+    #run_timeseries(net, continue_on_divergence=True, max_iteration=60, verbose=True, run=run_collapse_with_extgrid)
+    #collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
 
     """net = init_run()

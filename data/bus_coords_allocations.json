@@ -1,0 +1,212 @@
+[
+    {
+        "bus": 1,
+        "coords": {
+            "coordinates": [-3, 3],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 2,
+        "coords": {
+            "coordinates": [2, 8],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 3,
+        "coords": {
+            "coordinates": [8, 12],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 4,
+        "coords": {
+            "coordinates": [-8, -10],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 5,
+        "coords": {
+            "coordinates": [0, 0],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 6,
+        "coords": {
+            "coordinates": [-18, 8],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 7,
+        "coords": {
+            "coordinates": [-28, -2],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 8,
+        "coords": {
+            "coordinates": [32, -4],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 9,
+        "coords": {
+            "coordinates": [12, 2],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 10,
+        "coords": {
+            "coordinates": [18, -8],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 11,
+        "coords": {
+            "coordinates": [5, -6],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 12,
+        "coords": {
+            "coordinates": [-5, -3],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 13,
+        "coords": {
+            "coordinates": [-2, -15],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 14,
+        "coords": {
+            "coordinates": [-12, -6],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 15,
+        "coords": {
+            "coordinates": [-10, -12],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 16,
+        "coords": {
+            "coordinates": [-10, 10],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 17,
+        "coords": {
+            "coordinates": [-12, 2],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 18,
+        "coords": {
+            "coordinates": [-8, 5],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 19,
+        "coords": {
+            "coordinates": [20, 8],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 20,
+        "coords": {
+            "coordinates": [-15, 6],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 21,
+        "coords": {
+            "coordinates": [25, -10],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 22,
+        "coords": {
+            "coordinates": [15, 14],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 23,
+        "coords": {
+            "coordinates": [12, 16],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 24,
+        "coords": {
+            "coordinates": [-30, -5],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 25,
+        "coords": {
+            "coordinates": [-35, 5],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 26,
+        "coords": {
+            "coordinates": [-20, -3],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 27,
+        "coords": {
+            "coordinates": [35, 8],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 28,
+        "coords": {
+            "coordinates": [24, -15],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 29,
+        "coords": {
+            "coordinates": [-15, -2],
+            "type": "Point"
+        }
+    },
+    {
+        "bus": 30,
+        "coords": {
+            "coordinates": [34, -6],
+            "type": "Point"
+        }
+    }
+]

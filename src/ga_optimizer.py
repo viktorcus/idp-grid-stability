@@ -9,6 +9,7 @@ from pandapower.run import runpp
 from pandapower.timeseries.run_time_series import run_timeseries
 from pandapower.networks.power_system_test_cases import case30
 from pandapower.create import create_storage
+from pandapower.toolbox import set_isolated_areas_out_of_service
 from pandapower import LoadflowNotConverged
 
 import profileloader as pl
@@ -51,12 +52,14 @@ max_discrepancy = 0
 monthly_profiles = {}
 iteration_counter = 0
 
+net_master = None
+
 weights = {
-    "bus": 0.3,
-    "line": 0.3,
+    "bus": 1,
+    "line": 1,
     "grid_penalty": 0,
-    "grid_price": 0.2,
-    "components": 0.2
+    "grid_price": 0.01,
+    "components": 1e-10
 }
 
 
@@ -76,6 +79,8 @@ def init_run(date=None):
     load_control = pl.json_to_net_generic(net, "load", date=date)
     gen_control = pl.json_to_net_pv(net, date=date)
     hydro_control = pl.json_to_net_hydro(net, date=date)
+    net = pl.json_to_bus_coords(net)
+    net = pl.json_to_lines(net)
     tracker_control = TimeStepTracker(net)
 
     net.load["q_mvar"] = 0      # not accounting for this for the time being
@@ -89,13 +94,15 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     Dispatches the storage options according to the current GA optimizer solution, and runs the timeseries
     """
     global monthly_profiles
+    
 
     net = init_run(date)
+    active_buses = net.bus[net.bus.in_service.values].index
     if month is not None:
         net = extract_monthly_profile(net, monthly_profiles, month)
 
     # define battery/ies
-    battery1 = create_storage(net, bus=solution.batt_bus1, 
+    battery1 = create_storage(net, bus=active_buses[solution.batt_bus1], 
                                 name="battery",
                                 p_mw=0, 
                                 max_p_mw=solution.batt_p_mw1,
@@ -108,7 +115,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     storage_control = Battery(net=net, element_index=battery1.item())
     net.poly_cost = storage_control.create_cost_element(net)
     if solution.batt_on2:
-        battery2 = create_storage(net, bus=solution.batt_bus2, 
+        battery2 = create_storage(net, bus=active_buses[solution.batt_bus2], 
                                 name="battery",
                                 p_mw=0, 
                                 max_p_mw=solution.batt_p_mw2,
@@ -121,7 +128,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
         storage_control = Battery(net=net, element_index=battery2.item())
         net.poly_cost = storage_control.create_cost_element(net)
     if solution.batt_on3:
-        battery3 = create_storage(net, bus=solution.batt_bus3, 
+        battery3 = create_storage(net, bus=active_buses[solution.batt_bus3], 
                                 name="battery",
                                 p_mw=0, 
                                 max_p_mw=solution.batt_p_mw3,
@@ -135,7 +142,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
         net.poly_cost = storage_control.create_cost_element(net)
 
 
-    hydrogen1 = create_storage(net, bus=solution.h2_bus1, 
+    hydrogen1 = create_storage(net, bus=active_buses[solution.h2_bus1], 
                                 name="hydrogen",
                                 p_mw=0, 
                                 max_p_mw=1000,
@@ -154,7 +161,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     net.poly_cost = storage_control.create_cost_element(net)
 
     if solution.h2_on2:
-        hydrogen2 = create_storage(net, bus=solution.h2_bus2, 
+        hydrogen2 = create_storage(net, bus=active_buses[solution.h2_bus2], 
                                     name="hydrogen",
                                     p_mw=0, 
                                     max_p_mw=1000,
@@ -201,16 +208,18 @@ def bus_violations(net):
     """
     Returns squared error representing the amount by which bus voltages are above or below the bus voltage limits 
     """
-    vm = net.res_bus.vm_pu.values
-    vmin = net.bus.min_vm_pu.values
-    vmax = net.bus.max_vm_pu.values
+    active_buses = net.bus.in_service.values
+
+    vm = net.res_bus.vm_pu.values[active_buses]
+    vmin = net.bus.min_vm_pu.values[active_buses]
+    vmax = net.bus.max_vm_pu.values[active_buses]
 
     over_voltage = np.maximum(0.0, vm - vmax)
     under_voltage = np.maximum(0.0, vmin - vm)
 
     voltage_violation = over_voltage + under_voltage
     regularized_voltage_violation = [voltage / 0.95 for voltage in voltage_violation]
-    bus_results = np.sum(regularized_voltage_violation) / len(net.res_bus)
+    bus_results = np.sum(regularized_voltage_violation) / len(regularized_voltage_violation)
     return bus_results
 
 def line_violations(net):
@@ -235,29 +244,10 @@ def grid_penalty(net):
 
 def ext_grid_prices(net):
     price_paid = net.poly_cost[net.poly_cost["et"] == "ext_grid"]["cp1_eur_per_mw"].item() * net.res_ext_grid.at[0,"p_mw"]
-    return abs(price_paid / (net_stats["Peak Surplus"] * net_stats["Peak Price"]))
+    return abs(price_paid / (net_stats["Peak Surplus MW"] * net_stats["Peak Price"]))
 
 def grid_component_prices(net):
-    max_poss_penalty = (            # max battery possible in simulation
-            2 *                                 # max num batteries
-            4 *                                 # c-rate
-            net_stats["Peak Deficit"]           # max p_mw
-    ) + 1 * ((                      # max hydrogen possible in simulation
-             9999 *                            # max electrolyzer units
-             4600 * 1000 *                      # electrolyzer EUR/MW
-             6.8 / 1000 *                        # electrolyzer MWh/Nm3
-             6                                  # electrolyzer Nm3/h        
-        ) + (
-            9999 *                             # max tanks
-            4.5 *                               # tank capacity kg
-            600                                 # EUR/kg   
-        ) + (
-            9999 *                             # max num fuel cells
-            225 / 1000 *                        # fuel cell MW
-            2400 * 1000                         # fuel cell EUR/MW
-        ))
-
-    return net.poly_cost[~net.poly_cost["et"].isin(["hydro", "pv"])]["cp0_eur"].sum() / max_poss_penalty
+    return net.poly_cost[~net.poly_cost["et"].isin(["hydro", "pv"])]["cp0_eur"].sum()
 
 def timeseries_runner(net, acc, **kwargs):
     """
@@ -301,12 +291,12 @@ if __name__ == '__main__':
     net = init_run()
     net_stats = energy_analysis(net)
 
-    max_discrepancy = net_stats["Peak Deficit"]
+    max_discrepancy = net_stats["Peak Deficit MW"]
     monthly_profiles = average_day(net)
     
     problem_kwargs = {
         "ga_evaluate": ga_evaluator,
-        "max_p_mw": abs(net_stats["Peak Deficit"])
+        "max_p_mw": abs(net_stats["Peak Deficit MW"])
     }
 
     pool = None
@@ -339,7 +329,7 @@ if __name__ == '__main__':
             ckpt = dill.load(f)
         algorithm = ckpt["algorithm"]
     else:
-        algorithm = MixedVariableGA(pop_size=120)
+        algorithm = MixedVariableGA(pop_size=100)
         algorithm.termination = get_termination("n_gen", 1)
 
     # run Optimization

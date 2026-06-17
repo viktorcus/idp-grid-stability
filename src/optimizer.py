@@ -174,7 +174,7 @@ def target_buses():
 
     net = init_run()
     net_stats = energy_analysis(net)
-    max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
+    max_discrepancy = max(net_stats["Peak Surplus MW"], abs(net_stats["Peak Deficit MW"]))
     num_buses = len(net.bus)
 
     optimizer_params = [max_discrepancy / 100]      # params representing mwh of 1+ batteries, divided by 100 for optimization 
@@ -225,7 +225,7 @@ def optimize_targets():
     for bus_list, err in rankings:
         net = init_run()
         net_stats = energy_analysis(net)
-        max_discrepancy = max(net_stats["Peak Surplus"], abs(net_stats["Peak Deficit"]))
+        max_discrepancy = max(net_stats["Peak Surplus MW"], abs(net_stats["Peak Deficit MW"]))
 
         # params representing mwh of 1+ batteries, divided by 100 for optimization 
         if len(bus_list) == 1:
