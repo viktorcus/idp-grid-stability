@@ -164,7 +164,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
                                 net=net, 
                                 element_index=hydrogen1.item(), 
                                 num_electrolyzer_units=solution.h2_num_electrolyzers1, 
-                                num_fuel_cell_stacks=solution.h2_num_fuelcells1,
+                                num_fuel_cells=solution.h2_num_fuelcells1,
                                 num_tanks=solution.h2_num_tanks1)
     net.poly_cost = storage_control.create_cost_element(net)
 
@@ -182,7 +182,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
         storage_control = Hydrogen(net=net, 
                                 element_index=hydrogen2.item(), 
                                     num_electrolyzer_units=solution.h2_num_electrolyzers2, 
-                                    num_fuel_cell_stacks=solution.h2_num_fuelcells2,
+                                    num_fuel_cells=solution.h2_num_fuelcells2,
                                     num_tanks=solution.h2_num_tanks2)
         net.poly_cost = storage_control.create_cost_element(net)
 
@@ -283,10 +283,8 @@ def ga_evaluator(solution: Solution):
     """
 
     total_cost = 0
-    month_var = 1
     try:
         for month in range(1,13):
-            month_var = month
             total_cost += deploy_net_runner(solution, month=month)
         #total_cost += deploy_net_runner(solution, date=net_stats["Peak Surplus Date"])
         #total_cost += deploy_net_runner(solution, date=net_stats["Peak Deficit Date"])

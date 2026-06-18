@@ -30,7 +30,7 @@ class Hydrogen(control.basic_controller.Controller):
             compressor_cost_per_mw=75000,           # EUR (single cost)
 
             # tank and volume parameters
-            tank_capacity_kg=4.5, 
+            tank_capacity_kg=4, 
             vol_h2_nm3=0, 
             tank_cost_per_kg=600,                   # EUR/kg
             num_tanks=1,                            # multiplier for tank data
@@ -107,8 +107,9 @@ class Hydrogen(control.basic_controller.Controller):
         net.storage.at[self.element_index, "min_p_mw"] = self.min_p_mw
         self.max_e_mwh = num_tanks * self.get_energy_per_tank()
         net.storage.at[self.element_index, "max_e_mwh"] = self.max_e_mwh
+        self.stored_e_mwh = self.soc_percent / 100 * self.max_e_mwh
         net.storage.at[self.element_index, "stored_e_mwh"] = self.stored_e_mwh
-
+        self.vol_h2_nm3 = self.stored_e_mwh / self.density_h2 / self.lhv_h2
 
 
     def get_energy_per_tank(self):
@@ -166,7 +167,7 @@ class Hydrogen(control.basic_controller.Controller):
                     "hydrogen",                                  # et
                     (self.num_electrolyzer_units * self.electrolyzer_cost_per_mw * self.electrolyzer_mwh_per_vol * self.electrolyzer_vol_per_h) +
                         (self.num_tanks * self.tank_capacity_kg * self.tank_cost_per_kg) +
-                        (self.num_fuel_cells * self.fuel_cell_cost_per_mw * self.fc_stack_output_mw), 
+                        (self.num_fuel_cells * self.fuel_cell_cost_per_mw * abs(self.fc_stack_output_mw)), 
                     0,                                          # cp1_eur_per_mw
                     0,                                          # cp2_eur_per_mw2
                     0,                                          # cq0_eur

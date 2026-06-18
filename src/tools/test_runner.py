@@ -157,15 +157,16 @@ def calculate_power_allocations(net, power_discrepancy, battery_idx, hydrogen_id
                 limit = net.storage.at[idx, "max_p_mw"]
                 actual = min(remaining, limit)
                 projected_e_mwh = net.storage.at[idx, "stored_e_mwh"] + (actual * 0.25)
-
+                
                 # check if the amount to be charged is not greater than our remaining capacity
-                if projected_e_mwh > net.storage.at[idx, "max_e_mwh"]:
+                if projected_e_mwh < net.storage.at[idx, "max_e_mwh"]:
                     net.storage.at[idx, "p_mw"] = actual
                     remaining -= actual
                 else:
                     actual = (net.storage.at[idx, "max_e_mwh"] - net.storage.at[idx, "stored_e_mwh"]) / 0.25
-                    net.storage.at[idx, "p_mw"] = -actual
-
+                    net.storage.at[idx, "p_mw"] = actual
+                    remaining -= actual
+                
                 if remaining <= tolerance_mw:
                     break
     
