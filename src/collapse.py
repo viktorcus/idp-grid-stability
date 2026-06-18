@@ -26,7 +26,7 @@ def run_collapse_with_extgrid(net, **kwargs):
     """
     global bus_failures, line_failures, timestep, test_date, results_dir
 
-    dispatch_storage(net, strategy='percentage_split')
+    dispatch_storage(net, hydrogen_percentage=0.6)
 
     try:
         runpp(net=net, init="dc", **kwargs)
@@ -112,18 +112,29 @@ if __name__ == '__main__':
 
 
     """ ********* FAILURE SCENARIOS ************** """
-    net = init_run(date=net_stats["Peak Surplus Date"])
+    """net = init_run(date=net_stats["Peak Surplus Date"])
     results_dir = "collapse\\single_storage_surplus"
     init_results_dir(net, results_dir) 
     run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
-    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Surplus Date: ")
+    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Surplus Date (MW): ")
 
     net = init_run(date=net_stats["Peak Deficit Date"])
     results_dir = "collapse\\single_storage_deficit"
     init_results_dir(net, results_dir) 
     run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
-    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Deficit Date: ")
+    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Deficit Date (MW): ")
 
+    net = init_run(date=net_stats["Max Surplus Date"])
+    results_dir = "collapse\\single_storage_surplus"
+    init_results_dir(net, results_dir) 
+    run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
+    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Surplus Date (MWh): ")
+
+    net = init_run(date=net_stats["Max Deficit Date"])
+    results_dir = "collapse\\single_storage_deficit"
+    init_results_dir(net, results_dir) 
+    run_timeseries(net, continue_on_divergence=True, max_iteration=40, verbose=True, run=run_collapse_with_extgrid)
+    collect_results(net, results_dir, bus_failures, line_failures, test_date, scenario="Peak Deficit Date (MWh): ")"""
 
     #net = init_run(date=net_stats["Peak Surplus Date"])
     net = init_run(date="3/3/2024")
@@ -173,8 +184,8 @@ if __name__ == '__main__':
     storage_control = Hydrogen(net=net, element_index=hydrogen2.item(), vol_h2_nm3=1e6, num_electrolyzer_units=1000, num_fuel_cell_stacks=1000)
     results_dir = "collapse\\batt_hydr_storage"
     init_results_dir(net, results_dir) 
-    #run_timeseries(net, continue_on_divergence=True, max_iteration=60, verbose=True, run=run_collapse_with_extgrid)
-    #collect_results(net, results_dir, bus_failures, line_failures, test_date)
+    run_timeseries(net, continue_on_divergence=True, max_iteration=60, verbose=True, run=run_collapse_with_extgrid)
+    collect_results(net, results_dir, bus_failures, line_failures, test_date)
 
 
     """net = init_run()

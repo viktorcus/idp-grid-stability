@@ -55,11 +55,19 @@ iteration_counter = 0
 net_master = None
 
 weights = {
-    "bus": 1,
-    "line": 1,
+    "bus": 0.05,
+    "line": 0.01,
     "grid_penalty": 0,
-    "grid_price": 0.01,
-    "components": 1e-10
+    "grid_price": 0.001,
+    "components": 1e-9
+}
+
+acc_totals = {
+        "bus": 0.0,
+        "line": 0.0,
+        "grid_penalty": 0.0,
+        "grid_price": 0.0,
+        "components": 0.0
 }
 
 
@@ -117,7 +125,7 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     if solution.batt_on2:
         battery2 = create_storage(net, bus=active_buses[solution.batt_bus2], 
                                 name="battery",
-                                p_mw=0, 
+                                p_mw=0,
                                 max_p_mw=solution.batt_p_mw2,
                                 max_q_mvar=solution.batt_p_mw2,
                                 min_p_mw=-solution.batt_p_mw2,
@@ -193,6 +201,12 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     except LoadflowNotConverged as e:
         return (1 - (net["_timestep"]  / 96)) * 1000
     
+    acc_totals["bus"] += acc["bus"] * weights["bus"]
+    acc_totals["line"] += acc["line"] * weights["line"]
+    # acc_totals["grid_penalty"] += acc["grid_penalty"] * weights["grid_penalty"]
+    acc_totals["grid_price"] += acc["grid_price"] * weights["grid_price"]
+    acc_totals["components"] += grid_component_prices(net) * weights["components"]
+
     total = (
         acc["bus"] * weights["bus"]
         + acc["line"] * weights["line"]
@@ -214,12 +228,11 @@ def bus_violations(net):
     vmin = net.bus.min_vm_pu.values[active_buses]
     vmax = net.bus.max_vm_pu.values[active_buses]
 
-    over_voltage = np.maximum(0.0, vm - vmax)
-    under_voltage = np.maximum(0.0, vmin - vm)
+    over_voltage = np.maximum(0.0, vm - 1.0)
+    under_voltage = np.maximum(0.0, 1.0 - vm)
 
     voltage_violation = over_voltage + under_voltage
-    regularized_voltage_violation = [voltage / 0.95 for voltage in voltage_violation]
-    bus_results = np.sum(regularized_voltage_violation) / len(regularized_voltage_violation)
+    bus_results = np.sum(voltage_violation)
     return bus_results
 
 def line_violations(net):
@@ -229,7 +242,7 @@ def line_violations(net):
     loading = net.res_line.loading_percent.values
     max_loading = net.line.max_loading_percent.values
 
-    line_violation = np.maximum(0.0, loading - max_loading)
+    line_violation = np.maximum(0.0, loading) # - max_loading)
     regularized_line_violation = [line / 100 for line in line_violation]
     line_results = np.sum(regularized_line_violation) / len(net.res_line)
     return line_results 
@@ -244,7 +257,7 @@ def grid_penalty(net):
 
 def ext_grid_prices(net):
     price_paid = net.poly_cost[net.poly_cost["et"] == "ext_grid"]["cp1_eur_per_mw"].item() * net.res_ext_grid.at[0,"p_mw"]
-    return abs(price_paid / (net_stats["Peak Surplus MW"] * net_stats["Peak Price"]))
+    return abs(price_paid)
 
 def grid_component_prices(net):
     return net.poly_cost[~net.poly_cost["et"].isin(["hydro", "pv"])]["cp0_eur"].sum()
@@ -254,7 +267,7 @@ def timeseries_runner(net, acc, **kwargs):
     Wrapper function around the pandapower timeseries. 
     Runs each individial step in the timeseries and extracts the violation costs for each step
     """
-    dispatch_storage(net, strategy='percentage_split')
+    dispatch_storage(net, hydrogen_percentage=0.6)
     runpp(net, max_iteration=10, init="dc")
 
     acc["bus"] += bus_violations(net)
@@ -333,15 +346,22 @@ if __name__ == '__main__':
         algorithm.termination = get_termination("n_gen", 1)
 
     # run Optimization
-    result = minimize(
-        problem,
-        algorithm,
-        verbose=True,
-        termination=None,
-        copy_algorithm=not continued_flag,
-        save_history=True,
-        callback=CheckpointCallback()
-    )
+    try:
+        result = minimize(
+            problem,
+            algorithm,
+            verbose=True,
+            termination=None,
+            copy_algorithm=not continued_flag,
+            save_history=True,
+            callback=CheckpointCallback()
+        )
+    except KeyboardInterrupt:
+        acc_sum = acc_totals["bus"] + acc_totals["components"] + acc_totals["grid_price"] + acc_totals["line"]
+        print(f'Bus percentage: {acc_totals["bus"] / acc_sum}')
+        print(f'Line percentage: {acc_totals["line"] / acc_sum}')
+        print(f'Components percentage: {acc_totals["components"] / acc_sum}')
+        print(f'Grid Price percentage: {acc_totals["grid_price"] / acc_sum}')
 
     print(f'Optimized result: {result.X}')
 

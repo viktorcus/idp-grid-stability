@@ -60,9 +60,8 @@ def collect_results(net, results_dir, bus_failures, line_failures, test_date, sc
     graph_p_mw(test_date, "ext_grid", results_dir, scenario=scenario)
     graph_p_mw(test_date, "storage", results_dir, scenario=scenario)
 
-def dispatch_storage(net, tolerance_mw=0.0001, strategy='', hydrogen_percentage=None):
+def dispatch_storage(net, tolerance_mw=0.0001, hydrogen_percentage=None):
     """
-    strategy options = ["battery_first", "percentage_split"]
     Default method to determine how to allocate storage between Battery and Hydrogen.
     Calls functions to either allocate by order, or by percentage
     """
