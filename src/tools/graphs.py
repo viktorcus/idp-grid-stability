@@ -30,17 +30,20 @@ def line_loading(line_list, date, results_dir, scenario):
     err_lines = lines[[str(x) for x in line_list]]
     ax = sb.lineplot(data=err_lines)
     ax.set(xlabel=f'time step ({date})', ylabel='loading percent', title=f'{scenario}Line Loading Exceeding Limits')
-    plt.show()
+    if len(line_list) > 0:
+        plt.show()
     ax.figure.savefig(f'..\\results\\{results_dir}\\res_line\\loading_percent.png')
 
 def bus_vpu(bus_list, date, results_dir, scenario):
+    
     lines = pd.read_csv(f'..\\results\\{results_dir}\\res_bus\\vm_pu.csv')
     err_lines = lines[[str(x) for x in bus_list]]
     ax = sb.lineplot(data=err_lines)
     ax.set(xlabel=f'time step ({date})', ylabel='V (p.u.)', title=f'{scenario}Bus Voltages Exceeding Limits')
     ax.hlines(y = [0.95, 1.05], 
         xmin=0, xmax=96, linestyles=["dashed", "dashed"], colors=["gray", "gray"])  
-    plt.show()
+    if len(bus_list) > 0:
+        plt.show()
     ax.figure.savefig(f'..\\results\\{results_dir}\\res_bus\\vm_pu.png')
 
 def graph_p_mw(date, net_element, results_dir, scenario):
@@ -59,7 +62,8 @@ def graph_battery_soc(net, date, results_dir, scenario):
         if int(col) not in battery_idx: results.drop(results.columns[int(col)], axis=1, inplace=True)
     ax = sb.lineplot(data=results)
     ax.set(xlabel=f'time step ({date})', ylabel='SOC', title=f'{scenario}Battery SOC Percent')
-    plt.show()
+    if len(battery_idx) > 0:
+        plt.show()
     ax.figure.savefig(f'..\\results\\{results_dir}\\storage\\soc_percent.png')
 
 def graph_hydrogen_storage(net, date, results_dir, scenario):
@@ -70,7 +74,8 @@ def graph_hydrogen_storage(net, date, results_dir, scenario):
         if int(col) not in battery_idx: results.drop(results.columns[int(col)], axis=1, inplace=True)
     ax = sb.lineplot(data=results)
     ax.set(xlabel=f'time step ({date})', ylabel='Energy (MWh)', title=f'{scenario}Hydrogen Stored')
-    plt.show()
+    if len(battery_idx) > 0:
+        plt.show()
     ax.figure.savefig(f'..\\results\\{results_dir}\\storage\\stored_e_mwh.png')
 
 def plot_powerflow_result(net, date, timestep, results_dir):
