@@ -59,7 +59,7 @@ weights = {
     "line": 0.01,
     "grid_penalty": 0,
     "grid_price": 0.001,
-    "components": 1e-9
+    "components": 1e-10
 }
 
 acc_totals = {
@@ -199,21 +199,21 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
     try:
         run_timeseries(net, continue_on_divergence=False, max_iteration=20, run=local_runner, verbose=False, time_steps=range(0,96))  
     except LoadflowNotConverged as e:
+        # punish non-convering grids by a factor of 1000 multiplied against how many steps remained in the day after non-convergence
         return (1 - (net["_timestep"]  / 96)) * 1000
     
     acc_totals["bus"] += acc["bus"] * weights["bus"]
     acc_totals["line"] += acc["line"] * weights["line"]
-    # acc_totals["grid_penalty"] += acc["grid_penalty"] * weights["grid_penalty"]
     acc_totals["grid_price"] += acc["grid_price"] * weights["grid_price"]
-    acc_totals["components"] += grid_component_prices(net) * weights["components"]
+    acc_totals["components"] += grid_component_prices(net) * weights["components"] if month == 1 else 0
 
     total = (
         acc["bus"] * weights["bus"]
         + acc["line"] * weights["line"]
-        + acc["grid_penalty"] * weights["grid_penalty"]
         + acc["grid_price"] * weights["grid_price"]
-        + grid_component_prices(net) * weights["components"]
     )
+    # count grid components cost only once
+    if month == 1: total += (grid_component_prices(net) * weights["components"])
     print(f'bus err: {acc["bus"] * weights["bus"]}   line err: {acc["line"] * weights["line"]}  price penalty:  {acc["grid_price"] * weights["grid_price"]}    components: {grid_component_prices(net) * weights["components"]}   total cost {total}')    
     
     return total
