@@ -2,11 +2,11 @@ from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Real, Integer, Binary
 from .solution import Solution
 import numpy as np
-import os
+import copy
 
 class GridPlanningProblem(ElementwiseProblem):
 
-    def __init__(self, ga_evaluate, max_p_mw, **kwargs):
+    def __init__(self, ga_evaluate, max_p_mw, active_nodes_idx, **kwargs):
 
         self.vars = {
             "batt_bus1": Integer(bounds=(0, 18)),
@@ -24,19 +24,20 @@ class GridPlanningProblem(ElementwiseProblem):
             "batt_e_mwh3": Real(bounds=(0.0, max_p_mw * 4)),
 
             "h2_bus1": Integer(bounds=(0, 18)),
-            "h2_num_electrolyzers1": Integer(bounds=(0, 10000)),
-            "h2_num_fuelcells1": Integer(bounds=(0, 10000)),
-            "h2_num_tanks1": Integer(bounds=(0, 10000)),
+            "h2_num_electrolyzers1": Integer(bounds=(0, 10)),
+            "h2_num_fuelcells1": Integer(bounds=(0, 5000)),
+            "h2_num_tanks1": Integer(bounds=(0, 100)),
 
             "h2_on2": Binary(),
             "h2_bus2": Integer(bounds=(0, 18)),
-            "h2_num_electrolyzers2": Integer(bounds=(0, 10000)),
-            "h2_num_fuelcells2": Integer(bounds=(0, 10000)),
-            "h2_num_tanks2": Integer(bounds=(0, 10000))
+            "h2_num_electrolyzers2": Integer(bounds=(0, 10)),
+            "h2_num_fuelcells2": Integer(bounds=(0, 5000)),
+            "h2_num_tanks2": Integer(bounds=(0, 100))
         }
 
         self.ga_evaluate = ga_evaluate
         self.n_var = 20 
+        self.active_nodes_idx = active_nodes_idx
         
         """xl = []
         xu = []
@@ -126,4 +127,10 @@ class GridPlanningProblem(ElementwiseProblem):
             ch1h2
         ]
 
-        print(f'[{out["F"]}:]   {sol}')
+        sol_copy = copy.deepcopy(sol)
+        sol_copy.batt_bus1 = self.active_nodes_idx[sol.batt_bus1]
+        sol_copy.batt_bus2 = self.active_nodes_idx[sol.batt_bus2]
+        sol_copy.batt_bus3 = self.active_nodes_idx[sol.batt_bus3]
+        sol_copy.h2_bus1 = self.active_nodes_idx[sol.h2_bus1]
+        sol_copy.h2_bus2 = self.active_nodes_idx[sol.h2_bus2]
+        print(f'[{out["F"]}:]   {sol_copy}')

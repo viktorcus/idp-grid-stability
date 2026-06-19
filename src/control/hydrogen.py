@@ -10,36 +10,35 @@ class Hydrogen(control.basic_controller.Controller):
             self, 
             net, 
             element_index, 
-            data_source=None, 
-            p_profile=None, 
-            in_service=True, 
-            recycle=False, 
-            order=0, 
-            level=0,
+            data_source = None, 
+            p_profile = None, 
+            in_service = True, 
+            recycle = False, 
+            order = 0, 
+            level = 0,
 
             # electrolyzer parameters 
-            electrolyzer_mwh_per_vol= 6.8 / 1000,     # MWh/Nm3 (converted from kWh/Nm3)
-            num_electrolyzer_units=1,               # multiplier for electrolyzer data
-            electrolyzer_vol_per_h=6,               # Nm3/h
-            electrolyzer_cost_per_mw=4600 * 1000,   # EUR/MW (converted from EUR/kW)
-            # 6.8 MWh/Nm3 * 6 Nm3/h = 40.8 MW power drawn for electrolysis
+            electrolyzer_mwh_per_vol = 4.72 / 1000,      # MWh/Nm3 (converted from kWh/Nm3)
+            num_electrolyzer_units = 1,                   # multiplier for electrolyzer data
+            electrolyzer_vol_per_h = 20200,               # Nm3/h
+            electrolyzer_cost_per_mw = 1500 * 1000,       # EUR/MW (converted from EUR/kW)
 
             # compressor parameters
-            p_mw_compression= 75 / 1000,            # MW (converted from kW)
-            compress_flowrate=3500,                 # Nm3/h
-            compressor_cost_per_mw=75000,           # EUR (single cost)
+            p_mw_compression = 40 / 1000,                # MW (converted from kW)
+            compress_flowrate = 111.23,                   # Nm3/h
+            compressor_cost = 200000,                     # EUR (single cost)
 
             # tank and volume parameters
-            tank_capacity_kg=4, 
-            vol_h2_nm3=0, 
-            tank_cost_per_kg=600,                   # EUR/kg
-            num_tanks=1,                            # multiplier for tank data
+            tank_capacity_kg = 510, 
+            vol_h2_nm3 = 0, 
+            tank_cost_per_kg = 950 / 14,                   # EUR/kg  (interpreted from original cost applied to 14kg tank)
+            num_tanks = 1,                                 # multiplier for tank data
 
             # fuel cell stack parameters
-            num_fuel_cells=1,                       # multiplier for fuel cell stack data
-            fc_stack_output_mw=-225 / 1000,         # MW (converted from kW and negated due to discharging)
-            fuel_cell_efficiency=0.6,               # multiplier used when calculating storage depletion during discharging
-            fuel_cell_cost_per_mw=2400 * 1000,      # EUR/MW (converted from EUR/kW)
+            num_fuel_cells = 1,                           # multiplier for fuel cell stack data
+            fc_stack_output_mw = -225 / 1000,             # MW (converted from kW and negated due to discharging)
+            fuel_cell_efficiency = 0.48,                   # multiplier used when calculating storage depletion during discharging
+            fuel_cell_cost = 1379000,                     # EUR (single cost)
             
             **kwargs):
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
@@ -77,7 +76,7 @@ class Hydrogen(control.basic_controller.Controller):
         # compressor data
         self.p_mw_compression = p_mw_compression        # MW
         self.compress_flowrate = compress_flowrate        # Nm3/hr
-        self.compressor_cost_per_mw = compressor_cost_per_mw
+        self.compressor_cost = compressor_cost
 
         # tank and volume data
         self.tank_capacity_kg  = tank_capacity_kg       # kg
@@ -93,7 +92,7 @@ class Hydrogen(control.basic_controller.Controller):
         self.num_fuel_cells = num_fuel_cells
         self.fc_stack_output_mw = fc_stack_output_mw        # MW
         self.fuel_cell_efficiency = fuel_cell_efficiency
-        self.fuel_cell_cost_per_mw = fuel_cell_cost_per_mw
+        self.fuel_cell_cost = fuel_cell_cost
 
         # profile attributes
         self.data_source = data_source
@@ -166,8 +165,9 @@ class Hydrogen(control.basic_controller.Controller):
                     self.element_index,                              # element
                     "hydrogen",                                  # et
                     (self.num_electrolyzer_units * self.electrolyzer_cost_per_mw * self.electrolyzer_mwh_per_vol * self.electrolyzer_vol_per_h) +
-                        (self.num_tanks * self.tank_capacity_kg * self.tank_cost_per_kg) +
-                        (self.num_fuel_cells * self.fuel_cell_cost_per_mw * abs(self.fc_stack_output_mw)), 
+                        (self.num_tanks * self.tank_capacity_kg * self.tank_cost_per_kg) + 
+                        self.compressor_cost +
+                        (self.num_fuel_cells * self.fuel_cell_cost), 
                     0,                                          # cp1_eur_per_mw
                     0,                                          # cp2_eur_per_mw2
                     0,                                          # cq0_eur
