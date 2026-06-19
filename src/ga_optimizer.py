@@ -4,6 +4,7 @@ import sys
 import dill
 import os
 import traceback
+import csv
 
 from pandapower.run import runpp
 from pandapower.timeseries.run_time_series import run_timeseries
@@ -34,14 +35,36 @@ from pymoo.parallelization.starmap import StarmapParallelization
 class CheckpointCallback(Callback):
 
     def notify(self, algorithm):
+        
         runner = algorithm.problem.elementwise_runner
         algorithm.problem.elementwise_runner = None
 
         try:
+            # write checkpoints for algorithm to resume
             with open("checkpoint.pkl", "wb") as f:
                 dill.dump({"algorithm": algorithm}, f)
         finally:
             algorithm.problem.elementwise_runner = runner
+
+        try: 
+            # write checkpoints for historical data (current optimized result at each iteration)
+            active_buses = [0, 1, 2, 3, 4, 6, 7, 9, 11, 14, 15, 16, 17, 19, 22, 23, 25, 28, 29]  # hard-coded temporarily
+            with open('..\\results\\checkpoints.csv', 'a', newline='') as f:
+                writer = csv.writer(f)
+                opt = algorithm.opt[0]
+                writer.writerow([
+                    algorithm.n_gen, algorithm.evaluator.n_eval, opt.F,
+                    active_buses[opt.X["batt_bus1"]], opt.X["batt_p_mw1"], opt.X["batt_e_mwh1"],
+                    opt.X["batt_on2"], active_buses[opt.X["batt_bus2"]], opt.X["batt_p_mw2"], opt.X["batt_e_mwh2"],
+                    opt.X["batt_on3"], active_buses[opt.X["batt_bus3"]], opt.X["batt_p_mw3"], opt.X["batt_e_mwh3"],
+                    active_buses[opt.X["h2_bus1"]], opt.X["h2_num_electrolyzers1"], opt.X["h2_num_fuelcells1"], opt.X["h2_num_tanks1"],
+                    opt.X["h2_on2"], active_buses[opt.X["h2_bus2"]], opt.X["h2_num_electrolyzers2"], opt.X["h2_num_fuelcells2"], opt.X["h2_num_tanks2"]
+                ])
+            f.close()
+        except:
+            print("failed to write to checkpoints.csv")
+            
+
         
 
 # define globals
@@ -52,14 +75,15 @@ max_discrepancy = 0
 monthly_profiles = {}
 iteration_counter = 0
 
+
 net_master = None
 
 weights = {
     "bus": 0.05,
     "line": 0.01,
     "grid_penalty": 0,
-    "grid_price": 0.001,
-    "components": 1e-10
+    "grid_price": 0.002,
+    "components": 5e-11
 }
 
 acc_totals = {
@@ -307,7 +331,8 @@ if __name__ == '__main__':
     
     problem_kwargs = {
         "ga_evaluate": ga_evaluator,
-        "max_p_mw": abs(net_stats["Peak Deficit MW"])
+        "max_p_mw": abs(net_stats["Peak Deficit MW"]),
+        "active_nodes_idx": net.bus[net.bus.in_service.values].index
     }
 
     pool = None
@@ -342,6 +367,25 @@ if __name__ == '__main__':
     else:
         algorithm = MixedVariableGA(pop_size=100)
         algorithm.termination = get_termination("n_gen", 1)
+
+        # take a backup and clear our checkpoints csv file
+        try:
+            os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
+        except FileExistsError:   # backup file already exists - remove then rename
+            os.remove('..\\results\\checkpoints_backup.csv')
+            os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
+        # begin the new checkpoints csv file
+        with open('..\\results\\checkpoints.csv', 'w+', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                        "n_gen", "n_eval", "F",
+                        "batt_bus1", "batt_p_mw1", "batt_e_mwh1",
+                        "bat_on2", "batt_bus2", "batt_p_mw2", "batt_e_mwh2",
+                        "bat_on3", "batt_bus3", "batt_p_mw3", "batt_e_mwh3",
+                        "h2_bus1", "h2_num_electrolyzers1", "h2_num_fuelcells1", "h2_num_tanks1",
+                        "h2_on2", "h2_bus2", "h2_num_electrolyzers2", "h2_num_fuelcells2", "h2_num_tanks2"
+                    ])
+            f.close()
 
     # run Optimization
     try:
