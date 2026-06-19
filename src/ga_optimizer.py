@@ -370,7 +370,8 @@ if __name__ == '__main__':
 
         # take a backup and clear our checkpoints csv file
         try:
-            os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
+            if os.path.exists('..\\results\\checkpoints.csv'):
+                os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
         except FileExistsError:   # backup file already exists - remove then rename
             os.remove('..\\results\\checkpoints_backup.csv')
             os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
