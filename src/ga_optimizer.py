@@ -49,7 +49,7 @@ class CheckpointCallback(Callback):
         try: 
             # write checkpoints for historical data (current optimized result at each iteration)
             active_buses = [0, 1, 2, 3, 4, 6, 7, 9, 11, 14, 15, 16, 17, 19, 22, 23, 25, 28, 29]  # hard-coded temporarily
-            with open('..\\results\\checkpoints.csv', 'a', newline='') as f:
+            with open('checkpoints.csv', 'a', newline='') as f:
                 writer = csv.writer(f)
                 opt = algorithm.opt[0]
                 writer.writerow([
@@ -79,10 +79,9 @@ iteration_counter = 0
 net_master = None
 
 weights = {
-    "bus": 0.05,
-    "line": 0.01,
-    "grid_penalty": 0,
-    "grid_price": 0.002,
+    "bus": 0.02,
+    "line": 0.03,
+    "grid_price": 0.00002,
     "components": 5e-11
 }
 
@@ -244,13 +243,11 @@ def deploy_net_runner(solution: Solution, month=None, date=None):
 
 def bus_violations(net):
     """
-    Returns squared error representing the amount by which bus voltages are above or below the bus voltage limits 
+    Returns error representing the amount by which bus voltages are above or below the bus voltage limits 
     """
     active_buses = net.bus.in_service.values
 
     vm = net.res_bus.vm_pu.values[active_buses]
-    vmin = net.bus.min_vm_pu.values[active_buses]
-    vmax = net.bus.max_vm_pu.values[active_buses]
 
     over_voltage = np.maximum(0.0, vm - 1.0)
     under_voltage = np.maximum(0.0, 1.0 - vm)
@@ -264,7 +261,6 @@ def line_violations(net):
     Returns squared error representing the amount by which line loading exceeds the maximum 
     """
     loading = net.res_line.loading_percent.values
-    max_loading = net.line.max_loading_percent.values
 
     line_violation = np.maximum(0.0, loading) # - max_loading)
     regularized_line_violation = [line / 100 for line in line_violation]
@@ -280,16 +276,24 @@ def grid_penalty(net):
     return np.sum(net.res_ext_grid.p_mw / max_discrepancy) ** 2
 
 def ext_grid_prices(net):
+    """ 
+    Returns error equal to the time interval's cost of external grid efficiency (given in price per mw)
+    times the amount of mw required to stabilize the grid
+    """
     price_paid = net.poly_cost[net.poly_cost["et"] == "ext_grid"]["cp1_eur_per_mw"].item() * net.res_ext_grid.at[0,"p_mw"]
     return abs(price_paid)
 
 def grid_component_prices(net):
+    """
+    Returns the total cost of the grid components being deployed for this trial.
+    Neglects costs for hydro and pv, since those are predefined amounts that are constant for every trial 
+    """
     return net.poly_cost[~net.poly_cost["et"].isin(["hydro", "pv"])]["cp0_eur"].sum()
 
 def timeseries_runner(net, acc, **kwargs):
     """
     Wrapper function around the pandapower timeseries. 
-    Runs each individial step in the timeseries and extracts the violation costs for each step
+    Runs each individial step in the timeeries and extracts the violation costs for each step
     """
     dispatch_storage(net, hydrogen_percentage=0.6)
     runpp(net, max_iteration=10, init="dc")
@@ -370,13 +374,13 @@ if __name__ == '__main__':
 
         # take a backup and clear our checkpoints csv file
         try:
-            if os.path.exists('..\\results\\checkpoints.csv'):
-                os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
+            if os.path.exists('checkpoints.csv'):
+                os.rename('checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
         except FileExistsError:   # backup file already exists - remove then rename
             os.remove('..\\results\\checkpoints_backup.csv')
-            os.rename('..\\results\\checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
+            os.rename('checkpoints.csv', '..\\results\\checkpoints_backup.csv') 
         # begin the new checkpoints csv file
-        with open('..\\results\\checkpoints.csv', 'w+', newline='') as f:
+        with open('checkpoints.csv', 'w+', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
                         "n_gen", "n_eval", "F",

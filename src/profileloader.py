@@ -243,7 +243,7 @@ def json_to_lines(net):
     with open(json_path, "r", encoding="utf-8") as f:
         lines = json.load(f)
 
-    for line in lines:
+    for idx, line in enumerate(lines):
         from_bus = line["from"]
         to_bus = line["to"]
         length = line["distance"]
@@ -253,7 +253,7 @@ def json_to_lines(net):
             from_bus=from_bus -1,
             to_bus=to_bus -1,
             length_km=length,
-            std_type="243-AL1/39-ST1A 110.0",
+            std_type="243-AL1/39-ST1A 110.0" if idx != 0 else "490-AL1/64-ST1A 220.0",
             max_loading_percent=100,
             name=f"{from_bus}-{to_bus}"
         )

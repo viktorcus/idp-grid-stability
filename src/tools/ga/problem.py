@@ -26,13 +26,13 @@ class GridPlanningProblem(ElementwiseProblem):
             "h2_bus1": Integer(bounds=(0, 18)),
             "h2_num_electrolyzers1": Integer(bounds=(0, 10)),
             "h2_num_fuelcells1": Integer(bounds=(0, 5000)),
-            "h2_num_tanks1": Integer(bounds=(0, 100)),
+            "h2_num_tanks1": Integer(bounds=(0, 300)),
 
             "h2_on2": Binary(),
             "h2_bus2": Integer(bounds=(0, 18)),
             "h2_num_electrolyzers2": Integer(bounds=(0, 10)),
             "h2_num_fuelcells2": Integer(bounds=(0, 5000)),
-            "h2_num_tanks2": Integer(bounds=(0, 100))
+            "h2_num_tanks2": Integer(bounds=(0, 300))
         }
 
         self.ga_evaluate = ga_evaluate
@@ -53,7 +53,7 @@ class GridPlanningProblem(ElementwiseProblem):
         self.xu = np.array(xu)"""
 
 
-        super().__init__(vars, n_var=self.n_var, n_obj=1, n_ieq_constr=13, **kwargs)
+        super().__init__(vars, n_var=self.n_var, n_obj=1, n_ieq_constr=16, **kwargs)
 
     def _evaluate(
         self,
@@ -97,6 +97,10 @@ class GridPlanningProblem(ElementwiseProblem):
         g2 = 0 if x["batt_on2"] == 0 else 4 * x["batt_p_mw2"] - x["batt_e_mwh2"]
         g3 = 0 if x["batt_on3"] == 0 else 4 * x["batt_p_mw3"] - x["batt_e_mwh3"]
 
+        g4 = x["batt_e_mwh1"] - 12 * x["batt_p_mw1"]
+        g5 = 0 if x["batt_on2"] == 0 else x["batt_e_mwh2"] - 12 * x["batt_p_mw2"]
+        g6 = 0 if x["batt_on3"] == 0 else x["batt_e_mwh3"] - 12 * x["batt_p_mw3"]
+
         b1 = x["batt_bus1"]
         b2 = x["batt_bus2"]
         b3 = x["batt_bus3"]
@@ -121,6 +125,7 @@ class GridPlanningProblem(ElementwiseProblem):
 
         out["G"] = [
             g1, g2, g3,
+            g4, g5, g6,
             c12, c13, c23,
             c1h1, c2h1, c3h1,
             c1h2, c2h2, c3h2,
